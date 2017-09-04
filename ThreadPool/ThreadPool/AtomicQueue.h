@@ -8,16 +8,16 @@
 
 
 template<typename T>
-class CAtomicQueue
+class Atomic_Queue
 {
 public:
-	CAtomicQueue() {}
+	Atomic_Queue() {}
 
 	//Insert an item at the back of the queue and signal any thread that might be waiting for the q to be populated
 	void push(const T&& item)
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
-		workQ.push(std::forward<const T>(item));
+		work_queue.push(std::forward<const T>(item));
 		m_cvNotEmpty.notify_one(); 
 	}
 
@@ -27,12 +27,12 @@ public:
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		//If the queue is empty return false
-		if(workQ.empty())
+		if(work_queue.empty())
 		{
 			return false;
 		}
-		workItem = std::move(workQ.front());
-		workQ.pop();
+		workItem = std::move(work_queue.front());
+		work_queue.pop();
 		return true;
 	}
 
@@ -42,20 +42,20 @@ public:
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
 		//If the queue is empty block the thread from running until a work item becomes available
-		m_cvNotEmpty.wait(lock, [this]{return !workQ.empty();});
-		workItem = std::move(workQ.front());
-		workQ.pop();
+		m_cvNotEmpty.wait(lock, [this]{return !work_queue.empty();});
+		workItem = std::move(work_queue.front());
+		work_queue.pop();
 	}
 
 	//Checking if the queue is empty or not
 	bool empty() const
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
-		return workQ.empty();
+		return work_queue.empty();
 	}
 
 private:
-	std::queue<T> workQ;
+	std::queue<T> work_queue;
 	mutable std::mutex m_mutex;
 	std::condition_variable m_cvNotEmpty;
 	
