@@ -13,6 +13,12 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
+    <Filter Include="Dependencies">
+      <UniqueIdentifier>{0a85a6e8-ad3f-4cbe-8e58-be4c7b06b0da}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{31199228-ee8c-41a6-ae95-9b137cb8a972}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp">
@@ -22,6 +28,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="ThreadPool.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Dependencies\src\glad\glad.c">
+      <Filter>Dependencies</Filter>
+    </ClCompile>
+    <ClCompile Include="ShaderHelper.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -38,5 +50,16 @@
     <ClInclude Include="Utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ShaderHelper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="vertex_shader.glsl">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="fragment_shader.glsl">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>
