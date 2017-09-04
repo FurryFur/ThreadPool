@@ -1,63 +1,64 @@
 /*********A very basic Work Queue class***************/
 
-#ifndef __WORKQUEUE_H__
-#define __WORKQUEUE_H__
+#ifndef WORKQUEUE_H
+#define WORKQUEUE_H
 
 #include <queue>
 #include <mutex>
 
 
 template<typename T>
-class CWorkQueue
+class CAtomicQueue
 {
 public:
-	CWorkQueue() {}
+	CAtomicQueue() {}
 
 	//Insert an item at the back of the queue and signal any thread that might be waiting for the q to be populated
-	void push(const T& item)
+	void push(const T&& item)
 	{
-		std::lock_guard<std::mutex> _lock(m_WorkQMutex);
-		workQ.push(std::move(item));
-		 m_WorkQCondition.notify_one();
+		std::lock_guard<std::mutex> lock(m_mutex);
+		workQ.push(std::forward<const T>(item));
+		m_cvNotEmpty.notify_one(); 
 	}
 
 	//Attempt to get a workitem from the queue
 	//If the Q is empty just return false; 
-	bool nonblocking_pop(T& _workItem)
+	bool tryPop(T& workItem)
 	{
-		std::lock_guard<std::mutex> _lock(m_WorkQMutex);
+		std::lock_guard<std::mutex> lock(m_mutex);
 		//If the queue is empty return false
 		if(workQ.empty())
 		{
 			return false;
 		}
-		_workItem = std::move(workQ.front());
+		workItem = std::move(workQ.front());
 		workQ.pop();
 		return true;
 	}
 
 	//Attempt to get a workitem from the queue
 	//If the Q is empty just return false; 
-	void blocking_pop(T& _workItem)
+	void pop(T& workItem)
 	{
-		std::unique_lock<std::mutex> _lock(m_WorkQMutex);
+		std::unique_lock<std::mutex> lock(m_mutex);
 		//If the queue is empty block the thread from running until a work item becomes available
-		m_WorkQCondition.wait(_lock, [this]{return !workQ.empty();});
-		_workItem = std::move(workQ.front());
+		m_cvNotEmpty.wait(lock, [this]{return !workQ.empty();});
+		workItem = std::move(workQ.front());
 		workQ.pop();
 	}
 
 	//Checking if the queue is empty or not
 	bool empty() const
 	{
-		std::lock_guard<std::mutex> _lock(m_WorkQMutex);
+		std::lock_guard<std::mutex> lock(m_mutex);
 		return workQ.empty();
 	}
 
 private:
 	std::queue<T> workQ;
-	mutable std::mutex m_WorkQMutex;
-	std::condition_variable m_WorkQCondition;
+	mutable std::mutex m_mutex;
+	std::condition_variable m_cvNotEmpty;
 	
 };
+
 #endif

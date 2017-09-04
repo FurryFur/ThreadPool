@@ -1,13 +1,14 @@
 #include <iostream>
 #include <array>
+#include <thread>
+#include <chrono>
 //#include <vld.h>
 
 #include <glad\glad.h>
 #include <GLFW\glfw3.h>
 
 #include "ThreadPool.h"
-#include "WorkQueue.h"
-#include "Task.h"
+#include "AtomicQueue.h"
 #include "ShaderHelper.h"
 #include "Utils.h"
 
@@ -23,6 +24,8 @@ const size_t g_kPixelsHoriz = 4;
 const size_t g_kPixelsVert = 4;
 
 Tensor<GLubyte, g_kPixelsVert, g_kPixelsHoriz, 3> g_textureData;
+
+using namespace std::chrono_literals;
 
 void errorCallback(int error, const char* description)
 {
@@ -112,6 +115,11 @@ GLuint setupTexuring(GLuint program) {
 	return texture;
 }
 
+void sleep(std::chrono::seconds seconds)
+{
+	std::this_thread::sleep_for(seconds);
+}
+
 int main()
 {
 	GLuint program;
@@ -163,6 +171,27 @@ int main()
 	createGeometry(VAO);
 	GLuint texture = setupTexuring(program);
 
+	srand((unsigned int)time(0));
+	const int kiTOTALITEMS = 20;
+	//Create a ThreadPool Object capable of holding as many threads as the number of cores
+	ThreadPool threadPool;
+	threadPool.Start();
+	// The main thread writes items to the WorkQueue
+	std::array<std::future<void>, kiTOTALITEMS> futures;
+	for(int i =0; i< kiTOTALITEMS; i++)
+	{
+		std::future<void> future = threadPool.Submit(sleep, 2s);
+		std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
+		//Sleep for some random time to simulate delay in arrival of work items
+		//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
+
+		futures[i] = std::move(future);
+	}
+	for (auto& future : futures)
+	{
+		future.get();
+	}
+
 	// Render loop
 	while (!glfwWindowShouldClose(window))
 	{
@@ -178,26 +207,6 @@ int main()
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}
-
-	//srand((unsigned int)time(0));
-	//const int kiTOTALITEMS = 20;
-	////Create a ThreadPool Object capable of holding as many threads as the number of cores
-	//ThreadPool& threadPool = ThreadPool::GetInstance();
-	////Initialize the pool
-	//threadPool.Initialize();
-	//threadPool.Start();
-	//// The main thread writes items to the WorkQueue
-	//for(int i =0; i< kiTOTALITEMS; i++)
-	//{
-	//	threadPool.Submit(CTask(i));
-	//	std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
-	//	//Sleep for some random time to simulate delay in arrival of work items
-	//	//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
-	//}
-	//if (threadPool.getItemsProcessed() == kiTOTALITEMS)
-	//{
-	//	threadPool.Stop();
-	//}
 
 	glfwDestroyWindow(window);
 	glfwTerminate();

@@ -165,7 +165,7 @@
     <ClInclude Include="Task.h" />
     <ClInclude Include="ThreadPool.h" />
     <ClInclude Include="Utils.h" />
-    <ClInclude Include="WorkQueue.h" />
+    <ClInclude Include="AtomicQueue.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="fragment_shader.glsl" />
