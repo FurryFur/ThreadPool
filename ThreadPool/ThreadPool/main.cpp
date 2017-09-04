@@ -106,7 +106,7 @@ GLuint setupTexuring(GLuint program) {
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-	// Bind shader variable to texture unit
+	// Bind shader sampler to a texture unit
 	glUniform1i(glGetUniformLocation(program, "texSampler"), 0);
 
 	return texture;
@@ -168,7 +168,7 @@ int main()
 	{
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		glActiveTexture(GL_TEXTURE0);
+		glActiveTexture(GL_TEXTURE0); // Put this texture in texture unit 0
 		glBindTexture(GL_TEXTURE_2D, texture);
 
 		glBindVertexArray(VAO);
