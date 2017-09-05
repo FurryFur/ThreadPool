@@ -27,12 +27,12 @@ const size_t g_num_components = 5;
 const size_t g_num_triangles = 2;
 const size_t g_vert_array_size = g_num_verts * g_num_components;
 const size_t g_idx_array_size = g_num_triangles * 3;
-const size_t g_pixels_horiz = 4;
-const size_t g_pixels_vert = 4;
+const size_t g_pixels_horiz = 16;
+const size_t g_pixels_vert = 16;
 
 const float g_camera_speed = 0.1f;
 
-Tensor<GLubyte, g_pixels_vert, g_pixels_horiz, 3> g_textureData;
+Tensor<GLubyte, g_pixels_vert, g_pixels_horiz, 3> g_texture_data;
 
 bool g_movingForward = false;
 bool g_movingBack = false;
@@ -120,13 +120,13 @@ void create_geometry(GLuint& rVAO) {
 // Setup texturing
 GLuint setup_texuring(GLuint program) {
 	// Create texture on CPU
-	for (size_t i = 0; i < g_textureData.size(); ++i)
+	for (size_t i = 0; i < g_texture_data.size(); ++i)
 	{
-		for (size_t j = 0; j < g_textureData[i].size(); ++j)
+		for (size_t j = 0; j < g_texture_data[i].size(); ++j)
 		{
-			g_textureData[i][j][0] = (i + j) % 2 == 0 ? 255 : 0;
-			g_textureData[i][j][1] = 0;
-			g_textureData[i][j][2] = (i + j) % 2 == 0 ? 0 : 255;
+			g_texture_data[i][j][0] = 255;
+			g_texture_data[i][j][1] = 0;
+			g_texture_data[i][j][2] = 0;
 		}
 	}
 
@@ -134,7 +134,7 @@ GLuint setup_texuring(GLuint program) {
 	GLuint texture;
 	glGenTextures(1, &texture);
 	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, g_pixels_horiz, g_pixels_vert, 0, GL_RGB, GL_UNSIGNED_BYTE, &g_textureData[0][0][0]);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, g_pixels_horiz, g_pixels_vert, 0, GL_RGB, GL_UNSIGNED_BYTE, &g_texture_data[0][0][0]);
 
 	// Setup texture filtering
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -268,6 +268,22 @@ void init(GLFWwindow*& window, GLuint& program, GLuint& VAO, GLuint& texture, fl
 	texture = setup_texuring(program);
 }
 
+void process_region(GLuint texture, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height)
+{
+	for (size_t i = yoffset; i < yoffset + height && i < g_texture_data.size(); ++i)
+	{
+		for (size_t j = xoffset; j < xoffset + width && j < g_texture_data[i].size(); ++j)
+		{
+			g_texture_data[i][j][0] = 0;
+			g_texture_data[i][j][1] = 255;
+			g_texture_data[i][j][2] = 0;
+		}
+	}
+
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, xoffset, yoffset, width, height, GL_RGB, GL_UNSIGNED_BYTE, &g_texture_data[0][0][0]);
+}
+
 int main()
 {
 	GLFWwindow* window;
@@ -276,26 +292,36 @@ int main()
 
 	init(window, program, VAO, texture, aspect_ratio);
 
-	srand((unsigned int)time(0));
-	const int kiTOTALITEMS = 20;
-	//Create a ThreadPool Object capable of holding as many threads as the number of cores
-	Thread_Pool thread_pool;
-	thread_pool.start();
-	// The main thread writes items to the WorkQueue
-	std::array<std::future<void>, kiTOTALITEMS> futures;
-	for(int i =0; i< kiTOTALITEMS; i++)
-	{
-		std::future<void> future = thread_pool.submit(sleep, 2s);
-		std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
-		//Sleep for some random time to simulate delay in arrival of work items
-		//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
+	GLint xoffset = 0;
+	GLint yoffset = 0;
+	GLsizei width = 10;
+	GLsizei height = 10;
+	process_region(texture, xoffset, yoffset, width, height);
 
-		futures[i] = std::move(future);
-	}
-	for (auto& future : futures)
-	{
-		future.get();
-	}
+	//srand((unsigned int)time(0));
+	//const int kiTOTALITEMS = 20;
+	////Create a ThreadPool Object capable of holding as many threads as the number of cores
+	//Thread_Pool thread_pool;
+	//thread_pool.start();
+	//// The main thread writes items to the WorkQueue
+	//std::array<std::future<void>, kiTOTALITEMS> futures;
+	//for(int i =0; i< kiTOTALITEMS; i++)
+	//{
+	//	GLint xoffset = 0;
+	//	GLint yoffset = 0;
+	//	GLsizei width = 10;
+	//	GLsizei height = 10;
+	//	std::future<void> future = thread_pool.submit(process_region, texture, xoffset, yoffset, width, height);
+	//	std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
+	//	//Sleep for some random time to simulate delay in arrival of work items
+	//	//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
+
+	//	futures[i] = std::move(future);
+	//}
+	//for (auto& future : futures)
+	//{
+	//	future.get();
+	//}
 
 	// Render loop
 	while (!glfwWindowShouldClose(window))
