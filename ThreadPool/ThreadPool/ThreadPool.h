@@ -23,7 +23,7 @@ public:
 	template<typename Callable, typename... Args>
 	std::future<std::result_of_t<Callable(Args...)>> submit(Callable&& workItem, Args&&... args);
 
-	void do_work();
+	void do_work(size_t thread_idx);
 	void start();
 	void stop();
 	std::atomic_int& get_items_processed();
@@ -51,6 +51,7 @@ private:
 	
 };
 
+// Arguments will all stored by copy for safety
 template<typename Callable, typename... Args>
 inline std::future<std::result_of_t<Callable(Args...)>> Thread_Pool::submit(Callable&& work_item, Args&&... args)
 {

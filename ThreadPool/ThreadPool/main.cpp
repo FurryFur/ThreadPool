@@ -2,6 +2,7 @@
 #include <array>
 #include <thread>
 #include <chrono>
+#include <functional>
 //#include <vld.h>
 
 #include <glad\glad.h>
@@ -119,22 +120,12 @@ void create_geometry(GLuint& rVAO) {
 
 // Setup texturing
 GLuint setup_texuring(GLuint program) {
-	// Create texture on CPU
-	for (size_t i = 0; i < g_texture_data.size(); ++i)
-	{
-		for (size_t j = 0; j < g_texture_data[i].size(); ++j)
-		{
-			g_texture_data[i][j][0] = 255;
-			g_texture_data[i][j][1] = 0;
-			g_texture_data[i][j][2] = 0;
-		}
-	}
-
 	// Buffer texture data to GPU
 	GLuint texture;
 	glGenTextures(1, &texture);
+	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, g_pixels_horiz, g_pixels_vert, 0, GL_RGB, GL_UNSIGNED_BYTE, &g_texture_data[0][0][0]);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, g_pixels_horiz, g_pixels_vert, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 
 	// Setup texture filtering
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -268,20 +259,74 @@ void init(GLFWwindow*& window, GLuint& program, GLuint& VAO, GLuint& texture, fl
 	texture = setup_texuring(program);
 }
 
-void process_region(GLuint texture, GLint xoffset, GLint yoffset, GLsizei width, GLsizei height)
+void process_region(GLint xoffset, GLint yoffset, GLsizei width, GLsizei height)
 {
-	for (size_t i = yoffset; i < yoffset + height && i < g_texture_data.size(); ++i)
+	for (size_t i = yoffset; i < static_cast<size_t>(yoffset + height) && i < g_texture_data.size(); ++i)
 	{
-		for (size_t j = xoffset; j < xoffset + width && j < g_texture_data[i].size(); ++j)
+		for (size_t j = xoffset; j < static_cast<size_t>(xoffset + width) && j < g_texture_data[i].size(); ++j)
 		{
+			// Convert to mandelbrot space
+
+
 			g_texture_data[i][j][0] = 0;
 			g_texture_data[i][j][1] = 255;
 			g_texture_data[i][j][2] = 0;
 		}
 	}
+}
 
+void update_texture(GLuint texture)
+{
+	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, xoffset, yoffset, width, height, GL_RGB, GL_UNSIGNED_BYTE, &g_texture_data[0][0][0]);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_pixels_horiz, g_pixels_vert, GL_RGB, GL_UNSIGNED_BYTE, &g_texture_data[0][0][0]);
+}
+
+void do_mandelbrot(GLuint texture)
+{
+	srand((unsigned int)time(0));
+	//Create a ThreadPool Object capable of holding as many threads as the number of cores
+	Thread_Pool thread_pool;
+	thread_pool.start();
+	// The main thread writes items to the WorkQueue
+	std::array<std::future<void>, g_pixels_vert * g_pixels_horiz> futures;
+	for (int i = 0; i< g_pixels_vert * g_pixels_horiz; i++)
+	{
+		GLsizei width = 1;
+		GLsizei height = 1;
+		GLint xoffset = i * width % g_pixels_horiz;
+		GLint yoffset = i * width / g_pixels_horiz;
+		std::future<void> future = thread_pool.submit(process_region, xoffset, yoffset, width, height);
+		std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
+		//Sleep for some random time to simulate delay in arrival of work items
+		//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
+
+		futures[i] = std::move(future);
+	}
+
+	// Wait for threads to finish
+	for (size_t i = 0; i < futures.size(); ++i)
+	{
+		auto& future = futures.at(i);
+
+		std::cout << "waiting for task " << i << "...\n";
+		std::future_status status;
+		do {
+			status = future.wait_for(std::chrono::seconds(1));
+			if (status == std::future_status::deferred) {
+				std::cout << "task " << i << " deferred\n";
+			}
+			else if (status == std::future_status::timeout) {
+				std::cout << "task " << i << " timeout\n";
+			}
+			else if (status == std::future_status::ready) {
+				std::cout << "task " << i << "ready!\n";
+			}
+		} while (status != std::future_status::ready);
+	}
+
+	// Send the new texture to the GPU
+	update_texture(texture);
 }
 
 int main()
@@ -292,36 +337,7 @@ int main()
 
 	init(window, program, VAO, texture, aspect_ratio);
 
-	GLint xoffset = 0;
-	GLint yoffset = 0;
-	GLsizei width = 10;
-	GLsizei height = 10;
-	process_region(texture, xoffset, yoffset, width, height);
-
-	//srand((unsigned int)time(0));
-	//const int kiTOTALITEMS = 20;
-	////Create a ThreadPool Object capable of holding as many threads as the number of cores
-	//Thread_Pool thread_pool;
-	//thread_pool.start();
-	//// The main thread writes items to the WorkQueue
-	//std::array<std::future<void>, kiTOTALITEMS> futures;
-	//for(int i =0; i< kiTOTALITEMS; i++)
-	//{
-	//	GLint xoffset = 0;
-	//	GLint yoffset = 0;
-	//	GLsizei width = 10;
-	//	GLsizei height = 10;
-	//	std::future<void> future = thread_pool.submit(process_region, texture, xoffset, yoffset, width, height);
-	//	std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
-	//	//Sleep for some random time to simulate delay in arrival of work items
-	//	//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
-
-	//	futures[i] = std::move(future);
-	//}
-	//for (auto& future : futures)
-	//{
-	//	future.get();
-	//}
+	do_mandelbrot(texture);
 
 	// Render loop
 	while (!glfwWindowShouldClose(window))
