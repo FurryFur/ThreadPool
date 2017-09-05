@@ -22,16 +22,16 @@ public:
 	
 	template<typename Callable, typename... Args>
 	std::future<std::result_of_t<Callable(Args...)>> submit(Callable&& workItem, Args&&... args);
-
-	void do_work(size_t thread_idx);
+	
 	void start();
 	void stop();
-	std::atomic_int& get_items_processed();
 
 private:
 	//The ThreadPool is non-copyable.
     Thread_Pool(const Thread_Pool& _kr) = delete;
     Thread_Pool& operator= (const Thread_Pool& _kr) = delete;
+
+	void do_work(size_t thread_idx);
 
 private:
 	//An atomic boolean variable to stop all threads in the threadpool.
@@ -45,9 +45,6 @@ private:
 
 	//A variable to hold the number of threads we want in the pool
 	unsigned int m_num_threads;
-
-	//An atomic variable to keep track of how many items have been processed.
-	std::atomic_int m_items_processed{ 0 };
 	
 };
 

@@ -28,12 +28,13 @@ const size_t g_num_components = 5;
 const size_t g_num_triangles = 2;
 const size_t g_vert_array_size = g_num_verts * g_num_components;
 const size_t g_idx_array_size = g_num_triangles * 3;
-const size_t g_pixels_horiz = 16;
-const size_t g_pixels_vert = 16;
+const size_t g_pixels_horiz = 800;
+const size_t g_pixels_vert = 800;
 
 const float g_camera_speed = 0.1f;
 
 Tensor<GLubyte, g_pixels_vert, g_pixels_horiz, 3> g_texture_data;
+std::array<std::future<void>, g_pixels_vert * g_pixels_horiz> g_futures;
 
 bool g_movingForward = false;
 bool g_movingBack = false;
@@ -282,14 +283,9 @@ void update_texture(GLuint texture)
 	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_pixels_horiz, g_pixels_vert, GL_RGB, GL_UNSIGNED_BYTE, &g_texture_data[0][0][0]);
 }
 
-void do_mandelbrot(GLuint texture)
+void do_mandelbrot(Thread_Pool& thread_pool, GLuint texture)
 {
-	srand((unsigned int)time(0));
-	//Create a ThreadPool Object capable of holding as many threads as the number of cores
-	Thread_Pool thread_pool;
-	thread_pool.start();
 	// The main thread writes items to the WorkQueue
-	std::array<std::future<void>, g_pixels_vert * g_pixels_horiz> futures;
 	for (int i = 0; i< g_pixels_vert * g_pixels_horiz; i++)
 	{
 		GLsizei width = 1;
@@ -297,32 +293,17 @@ void do_mandelbrot(GLuint texture)
 		GLint xoffset = i * width % g_pixels_horiz;
 		GLint yoffset = i * width / g_pixels_horiz;
 		std::future<void> future = thread_pool.submit(process_region, xoffset, yoffset, width, height);
-		std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
+		//std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
 		//Sleep for some random time to simulate delay in arrival of work items
 		//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
 
-		futures[i] = std::move(future);
+		g_futures[i] = std::move(future);
 	}
 
 	// Wait for threads to finish
-	for (size_t i = 0; i < futures.size(); ++i)
+	for (auto& future : g_futures)
 	{
-		auto& future = futures.at(i);
-
-		std::cout << "waiting for task " << i << "...\n";
-		std::future_status status;
-		do {
-			status = future.wait_for(std::chrono::seconds(1));
-			if (status == std::future_status::deferred) {
-				std::cout << "task " << i << " deferred\n";
-			}
-			else if (status == std::future_status::timeout) {
-				std::cout << "task " << i << " timeout\n";
-			}
-			else if (status == std::future_status::ready) {
-				std::cout << "task " << i << "ready!\n";
-			}
-		} while (status != std::future_status::ready);
+		future.get();
 	}
 
 	// Send the new texture to the GPU
@@ -337,7 +318,13 @@ int main()
 
 	init(window, program, VAO, texture, aspect_ratio);
 
-	do_mandelbrot(texture);
+	//Create a ThreadPool Object capable of holding as many threads as the number of cores
+	Thread_Pool thread_pool;
+	thread_pool.start();
+
+	do_mandelbrot(thread_pool, texture);
+
+	thread_pool.stop();
 
 	// Render loop
 	while (!glfwWindowShouldClose(window))
