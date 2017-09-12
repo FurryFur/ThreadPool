@@ -34,7 +34,7 @@ const size_t g_kPixelsVert = 16;
 const float g_kCameraSpeed = 0.1f;
 
 Tensor<GLubyte, g_kPixelsVert, g_kPixelsHoriz, 3> g_textureData;
-std::array<std::future<void>, g_pixels_vert * g_pixels_horiz> g_futures;
+std::array<std::future<void>, g_kPixelsVert * g_kPixelsHoriz> g_futures;
 
 bool g_movingForward = false;
 bool g_movingBack = false;
@@ -283,7 +283,7 @@ void update_texture(GLuint texture)
 	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_kPixelsHoriz, g_kPixelsVert, GL_RGB, GL_UNSIGNED_BYTE, &g_textureData[0][0][0]);
 }
 
-void doMandelbrot(GLuint texture)
+void doMandelbrot(ThreadPool& threadPool, GLuint texture)
 {
 	// The main thread writes items to the WorkQueue
 	for (int i = 0; i< g_kPixelsVert * g_kPixelsHoriz; i++)
@@ -292,7 +292,7 @@ void doMandelbrot(GLuint texture)
 		GLsizei height = 1;
 		GLint xoffset = i * width % g_kPixelsHoriz;
 		GLint yoffset = i * width / g_kPixelsHoriz;
-		std::future<void> future = thread_pool.submit(process_region, xoffset, yoffset, width, height);
+		std::future<void> future = threadPool.submit(process_region, xoffset, yoffset, width, height);
 		//std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
 		//Sleep for some random time to simulate delay in arrival of work items
 		//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
@@ -314,9 +314,9 @@ int main()
 {
 	GLFWwindow* window;
 	GLuint program, VAO, texture;
-	float aspect_ratio;
+	float aspectRatio;
 
-	init(window, program, VAO, texture, aspect_ratio);
+	init(window, program, VAO, texture, aspectRatio);
 
 	//Create a ThreadPool Object capable of holding as many threads as the number of cores
 	ThreadPool threadPool;
@@ -329,7 +329,7 @@ int main()
 	// Render loop
 	while (!glfwWindowShouldClose(window))
 	{
-		doTransforms(window, program, aspect_ratio);
+		doTransforms(window, program, aspectRatio);
 
 		glClear(GL_COLOR_BUFFER_BIT);
 

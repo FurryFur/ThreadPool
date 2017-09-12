@@ -31,7 +31,7 @@ private:
     ThreadPool(const ThreadPool& _kr) = delete;
     ThreadPool& operator= (const ThreadPool& _kr) = delete;
 
-	void do_work(size_t thread_idx);
+	void doWork(size_t thread_idx);
 
 private:
 	//An atomic boolean variable to stop all threads in the threadpool.
@@ -44,7 +44,7 @@ private:
 	std::vector<std::thread> m_workerThreads; 
 
 	//A variable to hold the number of threads we want in the pool
-	unsigned int m_num_threads;
+	unsigned int m_numThreads;
 	
 };
 
