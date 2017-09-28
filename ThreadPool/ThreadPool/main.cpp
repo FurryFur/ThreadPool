@@ -3,6 +3,7 @@
 #include <thread>
 #include <chrono>
 #include <functional>
+#include <complex>
 //#include <vld.h>
 
 #include <glad\glad.h>
@@ -28,18 +29,24 @@ const size_t g_kNumComponents = 5;
 const size_t g_kNumTriangles = 2;
 const size_t g_kVertArraySize = g_kNumVerts * g_kNumComponents;
 const size_t g_kIdxArraySize = g_kNumTriangles * 3;
-const size_t g_kPixelsHoriz = 16;
-const size_t g_kPixelsVert = 16;
+const size_t g_kPixelsHoriz = 1024;
+const size_t g_kPixelsVert = 1024;
+const size_t g_kRegionsHoriz = 8;
+const size_t g_kRegionsVert = 8;
+const size_t g_kRegionWidth = g_kPixelsHoriz / g_kRegionsHoriz;
+const size_t g_kRegionHeight = g_kPixelsVert / g_kRegionsVert;
 
 const float g_kCameraSpeed = 0.1f;
 
 Tensor<GLubyte, g_kPixelsVert, g_kPixelsHoriz, 3> g_textureData;
-std::array<std::future<void>, g_kPixelsVert * g_kPixelsHoriz> g_futures;
+std::array<std::future<void>, g_kRegionsHoriz * g_kRegionsVert> g_futures;
 
 bool g_movingForward = false;
 bool g_movingBack = false;
 bool g_movingLeft = false;
 bool g_movingRight = false;
+bool g_zoomingIn = false;
+bool g_zoomingOut = false;
 
 using namespace std::chrono_literals;
 
@@ -69,6 +76,19 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	{
 		g_movingBack = (action == GLFW_PRESS);
 	}
+	else if (key == GLFW_KEY_S && (action == GLFW_PRESS || action == GLFW_RELEASE))
+	{
+		g_movingBack = (action == GLFW_PRESS);
+	}
+	else if (key == GLFW_KEY_E && (action == GLFW_PRESS || action == GLFW_RELEASE)) 
+	{
+		g_zoomingIn = (action == GLFW_PRESS);
+	}
+	else if (key == GLFW_KEY_Q && (action == GLFW_PRESS || action == GLFW_RELEASE))
+	{
+		g_zoomingOut = (action == GLFW_PRESS);
+	}
+
 }
 
 void framebufferSizeCallback(GLFWwindow* window, int width, int height)
@@ -183,7 +203,12 @@ void doTransforms(GLFWwindow* window, GLuint program, float aspect_ratio)
 	//glUniform1d(uCurrentTimeLocation, currentTime);
 
 	static float s_translate = 0.0f, s_rotate = 0.0f, s_scale = 1.0f;
-	s_rotate += 0.6f;
+	static float s_fov = glm::radians(60.0f);
+	if (g_zoomingIn)
+		s_fov -= 0.01f;
+	if (g_zoomingOut)
+		s_fov += 0.01f;
+	//s_rotate += 0.6f;
 
 	s_cameraPos += s_cameraFront * g_kCameraSpeed * static_cast<float>(g_movingForward - g_movingBack);
 	s_cameraPos += glm::normalize(glm::cross(s_cameraFront, s_cameraUp)) * g_kCameraSpeed * static_cast<float>(g_movingRight - g_movingLeft);
@@ -193,7 +218,7 @@ void doTransforms(GLFWwindow* window, GLuint program, float aspect_ratio)
 	mat4 translate = glm::translate(mat4(), vec3{ 0.0f, 0.0f, -5.0f });
 	mat4 view = glm::lookAt(s_cameraPos, s_cameraPos + s_cameraFront, s_cameraUp);
 	mat4 ortho = glm::ortho(-aspect_ratio, aspect_ratio, -1.0f, 1.0f, 0.1f, 100.0f);
-	mat4 perspective = glm::perspective(glm::radians(60.0f), aspect_ratio, 1.0f, 100.0f);
+	mat4 perspective = glm::perspective(s_fov, aspect_ratio, 1.0f, 100.0f);
 
 	GLuint scaleLocation = glGetUniformLocation(program, "uScale");
 	GLuint rotateLocation = glGetUniformLocation(program, "uRotate");
@@ -260,18 +285,38 @@ void init(GLFWwindow*& window, GLuint& program, GLuint& VAO, GLuint& texture, fl
 	texture = setupTexuring(program);
 }
 
-void process_region(GLint xoffset, GLint yoffset, GLsizei width, GLsizei height)
+void process_region(size_t xoffset, size_t yoffset, size_t width, size_t height)
 {
-	for (size_t i = yoffset; i < static_cast<size_t>(yoffset + height) && i < g_textureData.size(); ++i)
+	const size_t numIterations = 20;
+
+	size_t regionEndY = yoffset + height;
+	size_t regionEndX = xoffset + width;
+	for (size_t i = yoffset; i < regionEndY && i < g_textureData.size(); ++i)
 	{
-		for (size_t j = xoffset; j < static_cast<size_t>(xoffset + width) && j < g_textureData[i].size(); ++j)
+		for (size_t j = xoffset; j < regionEndX && j < g_textureData[i].size(); ++j)
 		{
-			// Convert to mandelbrot space
+			// Convert from pixel coordinates (integers) to mandelbrot space (complex numbers in range [-2, 2]x[-2, 2])
+			double real = static_cast<double>(j) / g_kPixelsHoriz * 4 - 2;
+			double img = static_cast<double>(i) / g_kPixelsVert * 4 - 2;
+			std::complex<double> c = {real, img};
+			std::complex<double> z = 0;
+			double norm = 0;
+			bool diverges = false;
+			size_t iteration = 0;
+			for (iteration = 1; iteration <= numIterations; ++iteration) {
+				z = std::pow(z, 2) + c;
+				norm = std::norm(z);
+				if (norm > 4) {
+					diverges = true;
+					break;
+				}
+			}
 
+			double alpha = 1 - static_cast<double>(iteration) / numIterations;
 
-			g_textureData[i][j][0] = 0;
-			g_textureData[i][j][1] = 255;
-			g_textureData[i][j][2] = 0;
+			g_textureData[i][j][0] = diverges ? alpha * 255 : 0;
+			g_textureData[i][j][1] = diverges ? alpha * 255 : 0;
+			g_textureData[i][j][2] = diverges ? 255 : 0;
 		}
 	}
 }
@@ -285,19 +330,32 @@ void update_texture(GLuint texture)
 
 void doMandelbrot(ThreadPool& threadPool, GLuint texture)
 {
-	// The main thread writes items to the WorkQueue
-	for (int i = 0; i< g_kPixelsVert * g_kPixelsHoriz; i++)
-	{
-		GLsizei width = 1;
-		GLsizei height = 1;
-		GLint xoffset = i * width % g_kPixelsHoriz;
-		GLint yoffset = i * width / g_kPixelsHoriz;
-		std::future<void> future = threadPool.submit(process_region, xoffset, yoffset, width, height);
-		//std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
-		//Sleep for some random time to simulate delay in arrival of work items
-		//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
+	size_t regionHeight = g_kRegionHeight;
+	size_t regionWidth = g_kRegionWidth;
+	
+	// Submit regions to the WorkQueue
+	for (size_t i = 0; i < g_kRegionsVert; ++i) {
+		size_t regionStartY = i * regionHeight;
 
-		g_futures[i] = std::move(future);
+		// Handle underflow by assigning more work to regions in the last row
+		if ((i == g_kRegionsVert - 1) && (regionStartY + regionHeight < g_kPixelsVert))
+			regionHeight = g_kPixelsVert - regionStartY;
+
+		for (size_t j = 0; j < g_kRegionsHoriz; ++j) {
+			size_t regionStartX = j * regionWidth;
+
+			// Handle underflow by assigning more work to regions in the last column
+			if ((j == g_kRegionsHoriz - 1) && (regionStartX + regionWidth < g_kPixelsHoriz))
+				regionWidth = g_kPixelsHoriz - regionStartX;
+
+			std::future<void> future = threadPool.submit(process_region, regionStartX, regionStartY, regionWidth, regionHeight);
+			//std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
+			//Sleep for some random time to simulate delay in arrival of work items
+			//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
+
+			size_t workItemIdx = i * g_kRegionsHoriz + j;
+			g_futures[workItemIdx] = std::move(future);
+		}
 	}
 
 	// Wait for threads to finish
@@ -321,7 +379,8 @@ int main()
 	//Create a ThreadPool Object capable of holding as many threads as the number of cores
 	ThreadPool threadPool;
 	threadPool.start();
-
+	
+	// TODO: Read from file
 	doMandelbrot(threadPool, texture);
 
 	threadPool.stop();
