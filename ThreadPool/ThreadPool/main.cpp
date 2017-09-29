@@ -3,6 +3,7 @@
 #include <thread>
 #include <chrono>
 #include <functional>
+#include <complex>
 //#include <vld.h>
 
 #include <glad\glad.h>
@@ -23,27 +24,33 @@ using glm::vec4;
 #define BUFFER_OFFSET(i) ((GLvoid *)(i*sizeof(float)))
 
 // Constants for drawing main quad
-const size_t g_num_verts = 4;
-const size_t g_num_components = 5;
-const size_t g_num_triangles = 2;
-const size_t g_vert_array_size = g_num_verts * g_num_components;
-const size_t g_idx_array_size = g_num_triangles * 3;
-const size_t g_pixels_horiz = 800;
-const size_t g_pixels_vert = 800;
+const size_t g_kNumVerts = 4;
+const size_t g_kNumComponents = 5;
+const size_t g_kNumTriangles = 2;
+const size_t g_kVertArraySize = g_kNumVerts * g_kNumComponents;
+const size_t g_kIdxArraySize = g_kNumTriangles * 3;
+const size_t g_kPixelsHoriz = 1024;
+const size_t g_kPixelsVert = 1024;
+const size_t g_kRegionsHoriz = 8;
+const size_t g_kRegionsVert = 8;
+const size_t g_kRegionWidth = g_kPixelsHoriz / g_kRegionsHoriz;
+const size_t g_kRegionHeight = g_kPixelsVert / g_kRegionsVert;
 
-const float g_camera_speed = 0.1f;
+const float g_kCameraSpeed = 0.1f;
 
-Tensor<GLubyte, g_pixels_vert, g_pixels_horiz, 3> g_texture_data;
-std::array<std::future<void>, g_pixels_vert * g_pixels_horiz> g_futures;
+Tensor<GLubyte, g_kPixelsVert, g_kPixelsHoriz, 3> g_textureData;
+std::array<std::future<void>, g_kRegionsHoriz * g_kRegionsVert> g_futures;
 
 bool g_movingForward = false;
 bool g_movingBack = false;
 bool g_movingLeft = false;
 bool g_movingRight = false;
+bool g_zoomingIn = false;
+bool g_zoomingOut = false;
 
 using namespace std::chrono_literals;
 
-void error_callback(int error, const char* description)
+void errorCallback(int error, const char* description)
 {
 	fprintf(stderr, "Error: %s\n", description);
 }
@@ -69,20 +76,33 @@ void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods
 	{
 		g_movingBack = (action == GLFW_PRESS);
 	}
+	else if (key == GLFW_KEY_S && (action == GLFW_PRESS || action == GLFW_RELEASE))
+	{
+		g_movingBack = (action == GLFW_PRESS);
+	}
+	else if (key == GLFW_KEY_E && (action == GLFW_PRESS || action == GLFW_RELEASE)) 
+	{
+		g_zoomingIn = (action == GLFW_PRESS);
+	}
+	else if (key == GLFW_KEY_Q && (action == GLFW_PRESS || action == GLFW_RELEASE))
+	{
+		g_zoomingOut = (action == GLFW_PRESS);
+	}
+
 }
 
-void framebuffer_size_callback(GLFWwindow* window, int width, int height)
+void framebufferSizeCallback(GLFWwindow* window, int width, int height)
 {
 	glViewport(0, 0, width, height);
 }
 
 // Setup VAO for simple quad
-void create_geometry(GLuint& rVAO) {
+void createGeometry(GLuint& rVAO) {
 	glGenVertexArrays(1, &rVAO);
 	glBindVertexArray(rVAO);
 
 	// Create vertices on CPU
-	std::array<GLfloat, g_vert_array_size> vertices {
+	std::array<GLfloat, g_kVertArraySize> vertices {
 		-1.0f,  1.0f, 0.0f,    0.0f, 1.0f, // Top left
 		 1.0f,  1.0f, 0.0f,    1.0f, 1.0f, // Top right
 		 1.0f, -1.0f, 0.0f,    1.0f, 0.0f, // Bottom right
@@ -90,7 +110,7 @@ void create_geometry(GLuint& rVAO) {
 	};
 
 	// Create index buffer on the CPU
-	std::array<GLuint, g_idx_array_size> indices{
+	std::array<GLuint, g_kIdxArraySize> indices{
 		0, 1, 2,
 		0, 2, 3
 	};
@@ -109,24 +129,24 @@ void create_geometry(GLuint& rVAO) {
 
 	// Bind shader variables to the vertex data
 	GLuint aPositionLocation = 0;
-	glVertexAttribPointer(aPositionLocation, 3, GL_FLOAT, GL_FALSE, g_num_components * sizeof(GLfloat), BUFFER_OFFSET(0));
+	glVertexAttribPointer(aPositionLocation, 3, GL_FLOAT, GL_FALSE, g_kNumComponents * sizeof(GLfloat), BUFFER_OFFSET(0));
 	glEnableVertexAttribArray(aPositionLocation);
 
 	GLuint aTexcoordLocation = 1;
-	glVertexAttribPointer(aTexcoordLocation, 2, GL_FLOAT, GL_FALSE, g_num_components * sizeof(GLfloat), BUFFER_OFFSET(3));
+	glVertexAttribPointer(aTexcoordLocation, 2, GL_FLOAT, GL_FALSE, g_kNumComponents * sizeof(GLfloat), BUFFER_OFFSET(3));
 	glEnableVertexAttribArray(aTexcoordLocation);
 
 	glBindVertexArray(0);
 }
 
 // Setup texturing
-GLuint setup_texuring(GLuint program) {
+GLuint setupTexuring(GLuint program) {
 	// Buffer texture data to GPU
 	GLuint texture;
 	glGenTextures(1, &texture);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, g_pixels_horiz, g_pixels_vert, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB8, g_kPixelsHoriz, g_kPixelsVert, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
 
 	// Setup texture filtering
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -143,25 +163,25 @@ void sleep(std::chrono::seconds seconds)
 	std::this_thread::sleep_for(seconds);
 }
 
-void do_transforms(GLFWwindow* window, GLuint program, float aspect_ratio)
+void doTransforms(GLFWwindow* window, GLuint program, float aspect_ratio)
 {
-	static vec3 s_camera_pos{ 0.0f, 0.0f, 3.0 };
-	static vec3 s_camera_front{ 0.0f, 0.0f, -1.0f };
-	static vec3 s_camera_up{ 0.0f, 1.0f, 0.0f };
-	static double s_xpos, s_ypos, s_last_x, s_last_y, s_yaw, s_pitch;
+	static vec3 s_cameraPos{ 0.0f, 0.0f, 3.0 };
+	static vec3 s_cameraFront{ 0.0f, 0.0f, -1.0f };
+	static vec3 s_cameraUp{ 0.0f, 1.0f, 0.0f };
+	static double s_xpos, s_ypos, s_lastX, s_lastY, s_yaw, s_pitch;
 	glfwGetCursorPos(window, &s_xpos, &s_ypos);
 
 	static bool first_mouse = true;
 	if (first_mouse) {
-		s_last_x = s_xpos;
-		s_last_y = s_ypos;
+		s_lastX = s_xpos;
+		s_lastY = s_ypos;
 		first_mouse = false;
 	}
 
-	double xoffset = s_xpos - s_last_x; //+vexoffsetgives clockwise rotation
-	double yoffset = s_ypos - s_last_y; //+veyoffsetgives clockwise rotation
-	s_last_x = s_xpos;
-	s_last_y = s_ypos;
+	double xoffset = s_xpos - s_lastX; //+vexoffsetgives clockwise rotation
+	double yoffset = s_ypos - s_lastY; //+veyoffsetgives clockwise rotation
+	s_lastX = s_xpos;
+	s_lastY = s_ypos;
 	const double sensitivity = 0.05;
 	xoffset *= sensitivity;
 	yoffset *= sensitivity;
@@ -177,41 +197,46 @@ void do_transforms(GLFWwindow* window, GLuint program, float aspect_ratio)
 	vec3 frontVector(-cos(glm::radians(s_pitch)) * sin(glm::radians(s_yaw)),
 	                  sin(glm::radians(s_pitch)),
 	                 -cos(glm::radians(s_pitch)) * cos(glm::radians(s_yaw)));
-	s_camera_front = glm::normalize(frontVector);
+	s_cameraFront = glm::normalize(frontVector);
 	//double currentTime = glfwGetTime();
 	//currentTime = currentTime / 1000.0;
 	//glUniform1d(uCurrentTimeLocation, currentTime);
 
 	static float s_translate = 0.0f, s_rotate = 0.0f, s_scale = 1.0f;
-	s_rotate += 0.6f;
+	static float s_fov = glm::radians(60.0f);
+	if (g_zoomingIn)
+		s_fov -= 0.01f;
+	if (g_zoomingOut)
+		s_fov += 0.01f;
+	//s_rotate += 0.6f;
 
-	s_camera_pos += s_camera_front * g_camera_speed * static_cast<float>(g_movingForward - g_movingBack);
-	s_camera_pos += glm::normalize(glm::cross(s_camera_front, s_camera_up)) * g_camera_speed * static_cast<float>(g_movingRight - g_movingLeft);
+	s_cameraPos += s_cameraFront * g_kCameraSpeed * static_cast<float>(g_movingForward - g_movingBack);
+	s_cameraPos += glm::normalize(glm::cross(s_cameraFront, s_cameraUp)) * g_kCameraSpeed * static_cast<float>(g_movingRight - g_movingLeft);
 
 	mat4 scale = glm::scale(mat4(), vec3{ s_scale, s_scale, s_scale });
 	mat4 rotate = glm::rotate(mat4(), glm::radians(s_rotate), vec3{ 1.0f, 1.0f, 1.0f });
 	mat4 translate = glm::translate(mat4(), vec3{ 0.0f, 0.0f, -5.0f });
-	mat4 view = glm::lookAt(s_camera_pos, s_camera_pos + s_camera_front, s_camera_up);
+	mat4 view = glm::lookAt(s_cameraPos, s_cameraPos + s_cameraFront, s_cameraUp);
 	mat4 ortho = glm::ortho(-aspect_ratio, aspect_ratio, -1.0f, 1.0f, 0.1f, 100.0f);
-	mat4 perspective = glm::perspective(glm::radians(60.0f), aspect_ratio, 1.0f, 100.0f);
+	mat4 perspective = glm::perspective(s_fov, aspect_ratio, 1.0f, 100.0f);
 
-	GLuint scale_location = glGetUniformLocation(program, "uScale");
-	GLuint rotate_location = glGetUniformLocation(program, "uRotate");
-	GLuint translate_location = glGetUniformLocation(program, "uTranslate");
-	GLuint view_location = glGetUniformLocation(program, "uView");
-	GLuint perspective_location = glGetUniformLocation(program, "uPerspective");
+	GLuint scaleLocation = glGetUniformLocation(program, "uScale");
+	GLuint rotateLocation = glGetUniformLocation(program, "uRotate");
+	GLuint translateLocation = glGetUniformLocation(program, "uTranslate");
+	GLuint viewLocation = glGetUniformLocation(program, "uView");
+	GLuint perspectiveLocation = glGetUniformLocation(program, "uPerspective");
 	//GLuint uCurrentTimeLocation = glGetUniformLocation(program, "uCurrentTime");
 
-	glUniformMatrix4fv(scale_location, 1, GL_FALSE, glm::value_ptr(scale));
-	glUniformMatrix4fv(rotate_location, 1, GL_FALSE, glm::value_ptr(rotate));
-	glUniformMatrix4fv(translate_location, 1, GL_FALSE, glm::value_ptr(translate));
-	glUniformMatrix4fv(view_location, 1, GL_FALSE, glm::value_ptr(view));
-	glUniformMatrix4fv(perspective_location, 1, GL_FALSE, glm::value_ptr(perspective));
+	glUniformMatrix4fv(scaleLocation, 1, GL_FALSE, glm::value_ptr(scale));
+	glUniformMatrix4fv(rotateLocation, 1, GL_FALSE, glm::value_ptr(rotate));
+	glUniformMatrix4fv(translateLocation, 1, GL_FALSE, glm::value_ptr(translate));
+	glUniformMatrix4fv(viewLocation, 1, GL_FALSE, glm::value_ptr(view));
+	glUniformMatrix4fv(perspectiveLocation, 1, GL_FALSE, glm::value_ptr(perspective));
 }
 
 void init(GLFWwindow*& window, GLuint& program, GLuint& VAO, GLuint& texture, float& aspect_ratio)
 {
-	glfwSetErrorCallback(error_callback);
+	glfwSetErrorCallback(errorCallback);
 
 	if (!glfwInit())
 		exit(EXIT_FAILURE);
@@ -230,7 +255,7 @@ void init(GLFWwindow*& window, GLuint& program, GLuint& VAO, GLuint& texture, fl
 
 	// Register callbacks
 	glfwSetKeyCallback(window, keyCallback);
-	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
+	glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
@@ -256,22 +281,42 @@ void init(GLFWwindow*& window, GLuint& program, GLuint& VAO, GLuint& texture, fl
 	// Setup shaders and rendering
 	compileAndLinkShaders("vertex_shader.glsl", "fragment_shader.glsl", program);
 	glUseProgram(program);
-	create_geometry(VAO);
-	texture = setup_texuring(program);
+	createGeometry(VAO);
+	texture = setupTexuring(program);
 }
 
-void process_region(GLint xoffset, GLint yoffset, GLsizei width, GLsizei height)
+void process_region(size_t xoffset, size_t yoffset, size_t width, size_t height)
 {
-	for (size_t i = yoffset; i < static_cast<size_t>(yoffset + height) && i < g_texture_data.size(); ++i)
+	const size_t numIterations = 20;
+
+	size_t regionEndY = yoffset + height;
+	size_t regionEndX = xoffset + width;
+	for (size_t i = yoffset; i < regionEndY && i < g_textureData.size(); ++i)
 	{
-		for (size_t j = xoffset; j < static_cast<size_t>(xoffset + width) && j < g_texture_data[i].size(); ++j)
+		for (size_t j = xoffset; j < regionEndX && j < g_textureData[i].size(); ++j)
 		{
-			// Convert to mandelbrot space
+			// Convert from pixel coordinates (integers) to mandelbrot space (complex numbers in range [-2, 2]x[-2, 2])
+			double real = static_cast<double>(j) / g_kPixelsHoriz * 4 - 2;
+			double img = static_cast<double>(i) / g_kPixelsVert * 4 - 2;
+			std::complex<double> c = {real, img};
+			std::complex<double> z = 0;
+			double norm = 0;
+			bool diverges = false;
+			size_t iteration = 0;
+			for (iteration = 1; iteration <= numIterations; ++iteration) {
+				z = std::pow(z, 2) + c;
+				norm = std::norm(z);
+				if (norm > 4) {
+					diverges = true;
+					break;
+				}
+			}
 
+			double alpha = 1 - static_cast<double>(iteration) / numIterations;
 
-			g_texture_data[i][j][0] = 0;
-			g_texture_data[i][j][1] = 255;
-			g_texture_data[i][j][2] = 0;
+			g_textureData[i][j][0] = diverges ? alpha * 255 : 0;
+			g_textureData[i][j][1] = diverges ? alpha * 255 : 0;
+			g_textureData[i][j][2] = diverges ? 255 : 0;
 		}
 	}
 }
@@ -280,22 +325,37 @@ void update_texture(GLuint texture)
 {
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_pixels_horiz, g_pixels_vert, GL_RGB, GL_UNSIGNED_BYTE, &g_texture_data[0][0][0]);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_kPixelsHoriz, g_kPixelsVert, GL_RGB, GL_UNSIGNED_BYTE, &g_textureData[0][0][0]);
 }
 
-void do_mandelbrot(Thread_Pool& thread_pool, GLuint texture)
+void doMandelbrot(ThreadPool& threadPool, GLuint texture)
 {
-	// The main thread writes items to the WorkQueue
-	for (int i = 0; i< g_pixels_vert * g_pixels_horiz; i++)
-	{
-		GLsizei width = 1;
-		GLsizei height = 1;
-		GLint xoffset = i * width % g_pixels_horiz;
-		GLint yoffset = i * width / g_pixels_horiz;
-		g_futures[i] = thread_pool.submit(process_region, xoffset, yoffset, width, height);
-		//std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
-		//Sleep for some random time to simulate delay in arrival of work items
-		//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
+	size_t regionHeight = g_kRegionHeight;
+	size_t regionWidth = g_kRegionWidth;
+	
+	// Submit regions to the WorkQueue
+	for (size_t i = 0; i < g_kRegionsVert; ++i) {
+		size_t regionStartY = i * regionHeight;
+
+		// Handle underflow by assigning more work to regions in the last row
+		if ((i == g_kRegionsVert - 1) && (regionStartY + regionHeight < g_kPixelsVert))
+			regionHeight = g_kPixelsVert - regionStartY;
+
+		for (size_t j = 0; j < g_kRegionsHoriz; ++j) {
+			size_t regionStartX = j * regionWidth;
+
+			// Handle underflow by assigning more work to regions in the last column
+			if ((j == g_kRegionsHoriz - 1) && (regionStartX + regionWidth < g_kPixelsHoriz))
+				regionWidth = g_kPixelsHoriz - regionStartX;
+
+			std::future<void> future = threadPool.submit(process_region, regionStartX, regionStartY, regionWidth, regionHeight);
+			//std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
+			//Sleep for some random time to simulate delay in arrival of work items
+			//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
+
+			size_t workItemIdx = i * g_kRegionsHoriz + j;
+			g_futures[workItemIdx] = std::move(future);
+		}
 	}
 
 	// Wait for threads to finish
@@ -312,22 +372,23 @@ int main()
 {
 	GLFWwindow* window;
 	GLuint program, VAO, texture;
-	float aspect_ratio;
+	float aspectRatio;
 
-	init(window, program, VAO, texture, aspect_ratio);
+	init(window, program, VAO, texture, aspectRatio);
 
 	//Create a ThreadPool Object capable of holding as many threads as the number of cores
-	Thread_Pool thread_pool;
-	thread_pool.start();
+	ThreadPool threadPool;
+	threadPool.start();
+	
+	// TODO: Read from file
+	doMandelbrot(threadPool, texture);
 
-	do_mandelbrot(thread_pool, texture);
-
-	thread_pool.stop();
+	threadPool.stop();
 
 	// Render loop
 	while (!glfwWindowShouldClose(window))
 	{
-		do_transforms(window, program, aspect_ratio);
+		doTransforms(window, program, aspectRatio);
 
 		glClear(GL_COLOR_BUFFER_BIT);
 
@@ -335,7 +396,7 @@ int main()
 		glBindTexture(GL_TEXTURE_2D, texture);
 
 		glBindVertexArray(VAO);
-		glDrawElements(GL_TRIANGLES, g_idx_array_size, GL_UNSIGNED_INT, BUFFER_OFFSET(0));
+		glDrawElements(GL_TRIANGLES, g_kIdxArraySize, GL_UNSIGNED_INT, BUFFER_OFFSET(0));
 		glBindVertexArray(0);
 
 		glfwSwapBuffers(window);
