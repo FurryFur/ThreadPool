@@ -292,12 +292,10 @@ void do_mandelbrot(Thread_Pool& thread_pool, GLuint texture)
 		GLsizei height = 1;
 		GLint xoffset = i * width % g_pixels_horiz;
 		GLint yoffset = i * width / g_pixels_horiz;
-		std::future<void> future = thread_pool.submit(process_region, xoffset, yoffset, width, height);
+		g_futures[i] = thread_pool.submit(process_region, xoffset, yoffset, width, height);
 		//std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
 		//Sleep for some random time to simulate delay in arrival of work items
 		//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
-
-		g_futures[i] = std::move(future);
 	}
 
 	// Wait for threads to finish
