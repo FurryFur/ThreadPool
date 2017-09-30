@@ -4,7 +4,7 @@
 #include <chrono>
 #include <functional>
 #include <complex>
-#include <mutex>
+//#include <mutex>
 //#include <vld.h>
 
 #include <glad\glad.h>
@@ -286,17 +286,14 @@ void init(GLFWwindow*& window, GLuint& program, GLuint& VAO, GLuint& texture, fl
 	texture = setupTexuring(program);
 }
 
-std::mutex mutex;
-void update_texture(GLFWwindow* window, GLuint texture, size_t program, size_t regionStartX, size_t regionStartY, size_t regionWidth, size_t regionHeight)
+//std::mutex mutex;
+void update_texture(const ThreadPool& threadPool, GLuint texture, size_t program, size_t regionStartX, size_t regionStartY, size_t regionWidth, size_t regionHeight)
 {
-	std::lock_guard<std::mutex> lock(mutex);
+	//std::lock_guard<std::mutex> lock(mutex);
 
-	// TODO: Make helper functions for initializing context on each thread
-	// TODO: Create helper function for destroyng contexts on all threads
-	// TODO: Create helper function for getting current thread context
-	//glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
-	static thread_local GLFWwindow* s_threadGLCtx = glfwCreateWindow(1, 1, "ctx", nullptr, window);
-	glfwMakeContextCurrent(s_threadGLCtx);
+	// glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
+	// static thread_local GLFWwindow* s_threadGLCtx = glfwCreateWindow(1, 1, "ctx", nullptr, window);
+	glfwMakeContextCurrent(threadPool.getThreadLocalWinContext());
 
 	glUseProgram(program);
 	glActiveTexture(GL_TEXTURE0);
@@ -346,6 +343,13 @@ void process_region(GLFWwindow* window, GLuint texture, GLuint program, size_t r
 
 void doMandelbrot(ThreadPool& threadPool, GLFWwindow* window, GLuint program, GLuint texture)
 {
+	for (size_t i = 0; i < threadPool.getNumThreads(); ++i) {
+		//glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
+		GLFWwindow* winContext = glfwCreateWindow(1, 1, "ctx", nullptr, window);
+		threadPool.storeThreadLocalWinContext(i, winContext);
+	}
+	
+
 	size_t regionHeight = g_kRegionHeight;
 	size_t regionWidth = g_kRegionWidth;
 	
@@ -363,6 +367,8 @@ void doMandelbrot(ThreadPool& threadPool, GLFWwindow* window, GLuint program, GL
 			// Handle underflow by assigning more work to regions in the last column
 			if ((j == g_kRegionsHoriz - 1) && (regionStartX + regionWidth < g_kPixelsHoriz))
 				regionWidth = g_kPixelsHoriz - regionStartX;
+
+			
 
 			std::future<void> future = threadPool.submit(process_region, window, texture, program, regionStartX, regionStartY, regionWidth, regionHeight);
 			//std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;

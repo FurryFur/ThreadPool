@@ -53,9 +53,11 @@ size_t ThreadPool::getNumThreads() const
 	return m_numThreads;
 }
 
-void ThreadPool::doWork(size_t thread_idx)
+void ThreadPool::doWork(size_t threadId)
 {
 	//Entry point of  a thread.
+	tl_threadId = threadId;
+
 	//std::cout << std::endl << "Thread with id " << thread_idx << "starting........" << std::endl;
 	while(!m_stop)
 	{

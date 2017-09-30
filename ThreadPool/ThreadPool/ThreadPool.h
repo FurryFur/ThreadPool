@@ -1,6 +1,8 @@
 #ifndef THREADPOOL_H
 #define THREADPOOL_H
 
+#include "AtomicQueue.h"
+
 #include <vector>
 #include <thread>
 #include <atomic>
@@ -10,14 +12,14 @@
 #include <future>
 #include <utility>
 #include <memory>
+#include <string>
 
-#include "AtomicQueue.h"
-
+template <typename ThreadLocalStorageT>
 class ThreadPool
 {
 public:
 	ThreadPool();
-	ThreadPool(unsigned int size);
+	ThreadPool(size_t size);
 	~ThreadPool();
 	
 	template<typename Callable, typename... Args>
@@ -33,9 +35,8 @@ private:
     ThreadPool(const ThreadPool& _kr) = delete;
     ThreadPool& operator= (const ThreadPool& _kr) = delete;
 
-	void doWork(size_t thread_idx);
+	void doWork(size_t threadId);
 
-private:
 	//An atomic boolean variable to stop all threads in the threadpool.
 	std::atomic_bool m_stop{ false };
 
@@ -47,8 +48,23 @@ private:
 
 	//A variable to hold the number of threads we want in the pool
 	size_t m_numThreads;
-	
+	static thread_local size_t tl_threadId;
 };
+
+template <typename 	ThreadLocalStorageT>
+class ThreadPoolWithStorage : ThreadPool {
+public:
+	ThreadLocalStorageT& getThreadLocalStorage();
+};
+
+template<typename ThreadLocalStorageT>
+inline ThreadLocalStorageT& ThreadPoolWithStorage<ThreadLocalStorageT>::getThreadLocalStorage()
+{
+	// TODO: insert return statement here
+	ThreadPool();
+	ThreadPool(size_t size);
+	~ThreadPool();
+}
 
 // Arguments will all stored by copy for safety
 template<typename Callable, typename... Args>
