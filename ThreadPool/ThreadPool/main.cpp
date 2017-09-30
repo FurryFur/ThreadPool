@@ -4,6 +4,7 @@
 #include <chrono>
 #include <functional>
 #include <complex>
+#include <mutex>
 //#include <vld.h>
 
 #include <glad\glad.h>
@@ -285,15 +286,35 @@ void init(GLFWwindow*& window, GLuint& program, GLuint& VAO, GLuint& texture, fl
 	texture = setupTexuring(program);
 }
 
-void process_region(size_t xoffset, size_t yoffset, size_t width, size_t height)
+std::mutex mutex;
+void update_texture(GLFWwindow* window, GLuint texture, size_t program, size_t regionStartX, size_t regionStartY, size_t regionWidth, size_t regionHeight)
+{
+	std::lock_guard<std::mutex> lock(mutex);
+
+	// TODO: Make helper functions for initializing context on each thread
+	// TODO: Create helper function for destroyng contexts on all threads
+	// TODO: Create helper function for getting current thread context
+	//glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
+	static thread_local GLFWwindow* s_threadGLCtx = glfwCreateWindow(1, 1, "ctx", nullptr, window);
+	glfwMakeContextCurrent(s_threadGLCtx);
+
+	glUseProgram(program);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture);
+
+	glPixelStorei(GL_UNPACK_ROW_LENGTH, g_kPixelsHoriz);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, regionStartX, regionStartY, regionWidth, regionHeight, GL_RGB, GL_UNSIGNED_BYTE, &g_textureData[regionStartY][regionStartX][0]);
+}
+
+void process_region(GLFWwindow* window, GLuint texture, GLuint program, size_t regionStartX, size_t regionStartY, size_t width, size_t height)
 {
 	const size_t numIterations = 20;
 
-	size_t regionEndY = yoffset + height;
-	size_t regionEndX = xoffset + width;
-	for (size_t i = yoffset; i < regionEndY && i < g_textureData.size(); ++i)
+	size_t regionEndY = regionStartY + height;
+	size_t regionEndX = regionStartX + width;
+	for (size_t i = regionStartY; i < regionEndY && i < g_textureData.size(); ++i)
 	{
-		for (size_t j = xoffset; j < regionEndX && j < g_textureData[i].size(); ++j)
+		for (size_t j = regionStartX; j < regionEndX && j < g_textureData[i].size(); ++j)
 		{
 			// Convert from pixel coordinates (integers) to mandelbrot space (complex numbers in range [-2, 2]x[-2, 2])
 			double real = static_cast<double>(j) / g_kPixelsHoriz * 4 - 2;
@@ -319,16 +340,11 @@ void process_region(size_t xoffset, size_t yoffset, size_t width, size_t height)
 			g_textureData[i][j][2] = diverges ? 255 : 0;
 		}
 	}
+
+	update_texture(window, texture, program, regionStartX, regionStartY, width, height);
 }
 
-void update_texture(GLuint texture)
-{
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, texture);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_kPixelsHoriz, g_kPixelsVert, GL_RGB, GL_UNSIGNED_BYTE, &g_textureData[0][0][0]);
-}
-
-void doMandelbrot(ThreadPool& threadPool, GLuint texture)
+void doMandelbrot(ThreadPool& threadPool, GLFWwindow* window, GLuint program, GLuint texture)
 {
 	size_t regionHeight = g_kRegionHeight;
 	size_t regionWidth = g_kRegionWidth;
@@ -348,7 +364,7 @@ void doMandelbrot(ThreadPool& threadPool, GLuint texture)
 			if ((j == g_kRegionsHoriz - 1) && (regionStartX + regionWidth < g_kPixelsHoriz))
 				regionWidth = g_kPixelsHoriz - regionStartX;
 
-			std::future<void> future = threadPool.submit(process_region, regionStartX, regionStartY, regionWidth, regionHeight);
+			std::future<void> future = threadPool.submit(process_region, window, texture, program, regionStartX, regionStartY, regionWidth, regionHeight);
 			//std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
 			//Sleep for some random time to simulate delay in arrival of work items
 			//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
@@ -357,15 +373,6 @@ void doMandelbrot(ThreadPool& threadPool, GLuint texture)
 			g_futures[workItemIdx] = std::move(future);
 		}
 	}
-
-	// Wait for threads to finish
-	for (auto& future : g_futures)
-	{
-		future.get();
-	}
-
-	// Send the new texture to the GPU
-	update_texture(texture);
 }
 
 int main()
@@ -381,7 +388,7 @@ int main()
 	threadPool.start();
 	
 	// TODO: Read from file
-	doMandelbrot(threadPool, texture);
+	doMandelbrot(threadPool, window, program, texture);
 
 	threadPool.stop();
 

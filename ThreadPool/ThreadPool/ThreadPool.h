@@ -26,6 +26,8 @@ public:
 	void start();
 	void stop();
 
+	size_t getNumThreads() const;
+
 private:
 	//The ThreadPool is non-copyable.
     ThreadPool(const ThreadPool& _kr) = delete;
@@ -44,7 +46,7 @@ private:
 	std::vector<std::thread> m_workerThreads; 
 
 	//A variable to hold the number of threads we want in the pool
-	unsigned int m_numThreads;
+	size_t m_numThreads;
 	
 };
 

@@ -16,7 +16,7 @@ ThreadPool::ThreadPool() :
 }
 
 
-ThreadPool::ThreadPool(unsigned int size) :
+ThreadPool::ThreadPool(size_t size) :
 	m_numThreads{ size }
 {
 
@@ -25,11 +25,11 @@ ThreadPool::ThreadPool(unsigned int size) :
 ThreadPool::~ThreadPool()
 {
 	m_stop = true;
-	for(unsigned int i=0;i<m_numThreads;i++)
+	for(size_t i=0; i < m_numThreads; ++i)
 	{
 		m_workQueue.push([]() {}); // Dummy task to wake threads up
 	}
-	for (unsigned int i = 0; i < m_numThreads; ++i)
+	for (size_t i = 0; i < m_numThreads; ++i)
 	{
 		m_workerThreads[i].join();
 	}
@@ -37,7 +37,7 @@ ThreadPool::~ThreadPool()
 
 void ThreadPool::start()
 {
-	for (unsigned int i = 0; i < m_numThreads; i++)
+	for (size_t i = 0; i < m_numThreads; ++i)
 	{
 		m_workerThreads.push_back(std::thread(&ThreadPool::doWork, this, i));
 	}
@@ -48,6 +48,10 @@ void ThreadPool::stop()
 	m_stop = true;
 }
 
+size_t ThreadPool::getNumThreads() const
+{
+	return m_numThreads;
+}
 
 void ThreadPool::doWork(size_t thread_idx)
 {
