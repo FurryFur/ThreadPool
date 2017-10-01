@@ -47,7 +47,7 @@ const size_t g_kRegionsVert = 16;
 const size_t g_kRegionWidth = g_kPixelsHoriz / g_kRegionsHoriz;
 const size_t g_kRegionHeight = g_kPixelsVert / g_kRegionsVert;
 const size_t g_kFractalDomainRange = 4;
-const size_t g_kStartIterations = 40;
+const size_t g_kStartIterations = 20;
 
 const float g_kCameraSpeed = 0.1f;
 
@@ -63,7 +63,7 @@ bool g_zoomingOut = false;
 bool g_fractalRenderRequest = false;
 
 double g_fractalZoomAmount = 1;
-double g_fractalCenterRe = 0;
+double g_fractalCenterRe = -0.5;
 double g_fractalCenterIm = 0;
 
 using namespace std::chrono_literals;
@@ -301,7 +301,9 @@ void process_region(GLuint texture, size_t regionStartX, size_t regionStartY
 			bool diverges = false;
 			size_t iteration = 0;
 			for (iteration = 1; iteration <= numIterations; ++iteration) {
+
 				z = std::pow(z, 2) + c;
+
 				norm = std::norm(z);
 				if (norm > 4) {
 					diverges = true;
@@ -309,11 +311,11 @@ void process_region(GLuint texture, size_t regionStartX, size_t regionStartY
 				}
 			}
 
-			double alpha = 1 - static_cast<double>(iteration) / numIterations;
+			double alpha = static_cast<double>(iteration) / numIterations;
 
 			g_textureData[i][j][0] = diverges ? alpha * 255 : 0;
-			g_textureData[i][j][1] = diverges ? alpha * 255 : 0;
-			g_textureData[i][j][2] = diverges ? 255 : 0;
+			g_textureData[i][j][1] = 0;
+			g_textureData[i][j][2] = 0;
 		}
 	}
 
@@ -422,7 +424,7 @@ int main()
 
 			nvgFontFace(nvgCtx, "sans");
 			nvgFontSize(nvgCtx, 24);
-			nvgFillColor(nvgCtx, nvgRGBA(128, 128, 0, 255));
+			nvgFillColor(nvgCtx, nvgRGBA(255, 255, 255, 255));
 			nvgTextAlign(nvgCtx, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
 			nvgText(nvgCtx, 10, 10, ("Fractal Calc Time: " + toString(fractalTime, 9)).c_str(), nullptr);
 			size_t numIterations = static_cast<size_t>(std::log(M_E + g_fractalZoomAmount - 1) * g_kStartIterations);
