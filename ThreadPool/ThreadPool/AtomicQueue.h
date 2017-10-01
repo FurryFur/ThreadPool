@@ -17,7 +17,7 @@ public:
 	void push(const T&& item)
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
-		workQueue.push(std::forward<const T>(item));
+		m_workQueue.push(std::forward<const T>(item));
 		m_cvNotEmpty.notify_one(); 
 	}
 
@@ -27,12 +27,12 @@ public:
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		//If the queue is empty return false
-		if(workQueue.empty())
+		if(m_workQueue.empty())
 		{
 			return false;
 		}
-		workItem = std::move(workQueue.front());
-		workQueue.pop();
+		workItem = std::move(m_workQueue.front());
+		m_workQueue.pop();
 		return true;
 	}
 
@@ -42,26 +42,32 @@ public:
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
 		//If the queue is empty block the thread from running until a work item becomes available
-		m_cvNotEmpty.wait(lock, [this]{return !workQueue.empty();});
-		workItem = std::move(workQueue.front());
-		workQueue.pop();
+		m_cvNotEmpty.wait(lock, [this]{return !m_workQueue.empty();});
+		workItem = std::move(m_workQueue.front());
+		m_workQueue.pop();
+	}
+
+	// Clear the queue
+	void clear() {
+		std::lock_guard<std::mutex> lock(m_mutex);
+		m_workQueue.swap(std::queue<T>()); // Swap with empty queue to clear
 	}
 
 	//Checking if the queue is empty or not
 	bool empty() const
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
-		return workQueue.empty();
+		return m_workQueue.empty();
 	}
 
 	size_t size() const
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
-		return workQueue.size();
+		return m_workQueue.size();
 	}
 
 private:
-	std::queue<T> workQueue;
+	std::queue<T> m_workQueue;
 	mutable std::mutex m_mutex;
 	std::condition_variable m_cvNotEmpty;
 	

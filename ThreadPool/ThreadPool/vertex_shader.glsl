@@ -7,12 +7,12 @@ uniform mat4 uScale;
 uniform mat4 uRotate;
 uniform mat4 uTranslate;
 uniform mat4 uView;
-uniform mat4 uPerspective;
+uniform mat4 uProjection;
 
 out vec2 TexCoord;
 
 void main() 
 {
-    gl_Position = uPerspective * uView * uTranslate * uRotate * uScale * vec4(aPosition, 1.0f);
+    gl_Position = uProjection * uView * uTranslate * uRotate * uScale * vec4(aPosition, 1.0f);
     TexCoord = aTexCoord;
 }

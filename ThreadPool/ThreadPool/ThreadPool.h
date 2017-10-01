@@ -2,6 +2,7 @@
 #define THREADPOOL_H
 
 #include "AtomicQueue.h"
+#include "Utils.h"
 
 #include <vector>
 #include <thread>
@@ -14,13 +15,16 @@
 #include <memory>
 #include <string>
 
-template <typename ThreadLocalStorageT>
 class ThreadPool
 {
 public:
 	ThreadPool();
 	ThreadPool(size_t size);
 	~ThreadPool();
+
+	//The ThreadPool is non-copyable.
+	ThreadPool(const ThreadPool& _kr) = delete;
+	ThreadPool& operator= (const ThreadPool& _kr) = delete;
 	
 	template<typename Callable, typename... Args>
 	std::future<std::result_of_t<Callable(Args...)>> submit(Callable&& workItem, Args&&... args);
@@ -28,13 +32,12 @@ public:
 	void start();
 	void stop();
 
+	// Empty the work queue 
+	void clearWork();
+
 	size_t getNumThreads() const;
 
 private:
-	//The ThreadPool is non-copyable.
-    ThreadPool(const ThreadPool& _kr) = delete;
-    ThreadPool& operator= (const ThreadPool& _kr) = delete;
-
 	void doWork(size_t threadId);
 
 	//An atomic boolean variable to stop all threads in the threadpool.
@@ -45,41 +48,74 @@ private:
 
 	//Create a pool of worker threads
 	std::vector<std::thread> m_workerThreads; 
-
+protected:
 	//A variable to hold the number of threads we want in the pool
 	size_t m_numThreads;
+
 	static thread_local size_t tl_threadId;
 };
 
 template <typename 	ThreadLocalStorageT>
-class ThreadPoolWithStorage : ThreadPool {
+class ThreadPoolWithStorage : public ThreadPool {
 public:
+	ThreadPoolWithStorage();
+	ThreadPoolWithStorage(size_t size);
+
+	// Returns the storage object associated with the specified thread
+	// ID. Thread ID 0 is reserved for the main thread, so there are
+	// m_numThreads + 1 thread local storage objects.
+	ThreadLocalStorageT& getThreadLocalStorage(size_t threadId);
+
+	// Returns the storage object for the current thread pool thread
+	// Note: This should only be call from inside a function that is 
+	// executing on the thread pool.
 	ThreadLocalStorageT& getThreadLocalStorage();
+
+private:
+	std::vector<ThreadLocalStorageT> m_threadStores;
 };
+
+template<typename ThreadLocalStorageT>
+inline ThreadPoolWithStorage<ThreadLocalStorageT>::ThreadPoolWithStorage()
+	: ThreadPool()
+	, m_threadStores{ m_numThreads + 1 } // Extra store for main thread
+{
+}
+
+template<typename ThreadLocalStorageT>
+inline ThreadPoolWithStorage<ThreadLocalStorageT>::ThreadPoolWithStorage(size_t size)
+	: ThreadPool(size)
+	, m_threadStores{ m_numThreads + 1 } // Extra store for main thread
+{
+}
+
+template<typename ThreadLocalStorageT>
+inline ThreadLocalStorageT & ThreadPoolWithStorage<ThreadLocalStorageT>::getThreadLocalStorage(size_t threadId)
+{
+	return m_threadStores.at(threadId);
+}
 
 template<typename ThreadLocalStorageT>
 inline ThreadLocalStorageT& ThreadPoolWithStorage<ThreadLocalStorageT>::getThreadLocalStorage()
 {
-	// TODO: insert return statement here
-	ThreadPool();
-	ThreadPool(size_t size);
-	~ThreadPool();
+	return m_threadStores.at(tl_threadId);
 }
 
-// Arguments will all stored by copy for safety
+// Arguments will all be stored by copy for safety
 template<typename Callable, typename... Args>
-inline std::future<std::result_of_t<Callable(Args...)>> ThreadPool::submit(Callable&& work_item, Args&&... args)
+inline std::future<std::result_of_t<Callable(Args...)>> ThreadPool::submit(Callable&& workItem, Args&&... args)
 {
-	using ResultT = std::result_of_t<Callable(Args...)>; // result_of_t returns the type result of calling Callable with Args
+	using ResultT = std::result_of_t<Callable(Args...)>; // result_of_t returns the result type of calling Callable with Args
 	using TaskT = std::packaged_task<ResultT(Args...)>;
 
-	auto task = std::make_shared<TaskT>(std::forward<Callable>(work_item));
+	auto task = std::make_shared<TaskT>(std::forward<Callable>(workItem));
+	std::future<ResultT> future = task->get_future();
 
-	m_workQueue.push(std::bind([](const std::shared_ptr<TaskT>& task, Args&... args) { // Bind always passes in arguments by lvalue
+	m_workQueue.push(std::bind([](const std::shared_ptr<TaskT>& task, InvokeTypeT<Args>... args) { // Bind always passes in arguments by lvalue
 		(*task)(args...);
-	}, task, std::forward<Args>(args)...));
+	}, std::move(task), std::forward<Args>(args)...));
 
-	return task->get_future();
+	return future;
 }
 
 #endif

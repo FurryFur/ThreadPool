@@ -36,6 +36,12 @@
     <ClCompile Include="Task.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="WinContextStore.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="GLUtils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Task.h">
@@ -53,6 +59,12 @@
     <ClInclude Include="AtomicQueue.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="WinContextStore.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="GLUtils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="vertex_shader.glsl">
@@ -61,5 +73,13 @@
     <None Include="fragment_shader.glsl">
       <Filter>Shaders</Filter>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <Font Include="Assets\Font\Roboto-Regular.ttf">
+      <Filter>Resource Files</Filter>
+    </Font>
+    <Font Include="Assets\Font\Roboto-Bold.ttf">
+      <Filter>Resource Files</Filter>
+    </Font>
   </ItemGroup>
 </Project>

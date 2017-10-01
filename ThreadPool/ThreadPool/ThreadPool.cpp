@@ -9,6 +9,8 @@
 //This Include
 #include "ThreadPool.h"
 
+thread_local size_t ThreadPool::tl_threadId;
+
 ThreadPool::ThreadPool() :
 	m_numThreads{ std::thread::hardware_concurrency() }
 { 
@@ -24,8 +26,23 @@ ThreadPool::ThreadPool(size_t size) :
 
 ThreadPool::~ThreadPool()
 {
+	stop();
+}
+
+void ThreadPool::start()
+{
+	m_stop = false;
+	for (size_t i = 0; i < m_numThreads; ++i)
+	{
+		// Use i+1 as thread id becuase ID 0 is reserved for the main thread
+		m_workerThreads.push_back(std::thread(&ThreadPool::doWork, this, i+1)); 
+	}
+}
+
+void ThreadPool::stop()
+{
 	m_stop = true;
-	for(size_t i=0; i < m_numThreads; ++i)
+	for (size_t i = 0; i < m_numThreads; ++i)
 	{
 		m_workQueue.push([]() {}); // Dummy task to wake threads up
 	}
@@ -33,19 +50,13 @@ ThreadPool::~ThreadPool()
 	{
 		m_workerThreads[i].join();
 	}
+	m_workQueue.clear();
+	m_workerThreads.clear();
 }
 
-void ThreadPool::start()
+void ThreadPool::clearWork()
 {
-	for (size_t i = 0; i < m_numThreads; ++i)
-	{
-		m_workerThreads.push_back(std::thread(&ThreadPool::doWork, this, i));
-	}
-}
-
-void ThreadPool::stop()
-{
-	m_stop = true;
+	m_workQueue.clear();
 }
 
 size_t ThreadPool::getNumThreads() const
