@@ -42,11 +42,12 @@ const size_t g_kVertArraySize = g_kNumVerts * g_kNumComponents;
 const size_t g_kIdxArraySize = g_kNumTriangles * 3;
 const size_t g_kPixelsHoriz = 1024;
 const size_t g_kPixelsVert = 1024;
-const size_t g_kRegionsHoriz = 4;
-const size_t g_kRegionsVert = 4;
+const size_t g_kRegionsHoriz = 16;
+const size_t g_kRegionsVert = 16;
 const size_t g_kRegionWidth = g_kPixelsHoriz / g_kRegionsHoriz;
 const size_t g_kRegionHeight = g_kPixelsVert / g_kRegionsVert;
 const size_t g_kFractalDomainRange = 4;
+const size_t g_kStartIterations = 40;
 
 const float g_kCameraSpeed = 0.1f;
 
@@ -279,7 +280,7 @@ void updateTexture(GLuint texture, size_t regionStartX, size_t regionStartY, siz
 void process_region(GLuint texture, size_t regionStartX, size_t regionStartY
                   , size_t width, size_t height)
 {
-	size_t numIterations = static_cast<size_t>(std::log(M_E + g_fractalZoomAmount - 1) * 20);
+	size_t numIterations = static_cast<size_t>(std::log(M_E + g_fractalZoomAmount - 1) * g_kStartIterations);
 
 	size_t regionEndY = regionStartY + height;
 	size_t regionEndX = regionStartX + width;
@@ -370,8 +371,12 @@ int main()
 	//}
 
 	// TODO: Read from file
-	submitMandelbrot(threadPool, texture, g_fractalZoomAmount);
+	static bool s_fractalTimerRunning = true;
+	using namespace std::chrono;
+	double fractalTime = -1;
 	threadPool.start();
+	auto start = high_resolution_clock::now();
+	submitMandelbrot(threadPool, texture, g_fractalZoomAmount);
 
 	// Render loop
 	while (!glfwWindowShouldClose(window))
@@ -384,12 +389,21 @@ int main()
 		glfwGetFramebufferSize(window, &fbWidth, &fbHeight);
 		float aspectRatio = static_cast<float>(winWidth) / winHeight;
 		float pxRatio = static_cast<float>(fbWidth) / winWidth;
+
+		// Update the mandelbrot texture on CPU / GPU
 		if (g_fractalRenderRequest) {
+
 			threadPool.clearWork();
+			s_fractalTimerRunning = true;
+			start = high_resolution_clock::now();
 			submitMandelbrot(threadPool, texture, g_fractalZoomAmount);
 			g_fractalRenderRequest = false;
 		}
 		updateTexture(texture, 0, 0, g_kPixelsHoriz, g_kPixelsVert);
+		if (s_fractalTimerRunning && futuresReady(g_futures)) {
+			fractalTime = duration_cast<nanoseconds>(high_resolution_clock::now() - start).count() / 1000000000.0;
+			s_fractalTimerRunning = false;
+		}
 
 		doTransforms(window, program, aspectRatio);
 
@@ -402,15 +416,22 @@ int main()
 		glDrawElements(GL_TRIANGLES, g_kIdxArraySize, GL_UNSIGNED_INT, BUFFER_OFFSET(0));
 		glBindVertexArray(0);
 
-		nvgBeginFrame(nvgCtx, winWidth, winHeight, pxRatio);
+		// Draw fractal stats
+		if (fractalTime > 0) {
+			nvgBeginFrame(nvgCtx, winWidth, winHeight, pxRatio);
 
-		nvgFontFace(nvgCtx, "sans");
-		nvgFontSize(nvgCtx, 24);
-		nvgFillColor(nvgCtx, nvgRGBA(0, 0, 0, 255));
-		nvgTextAlign(nvgCtx, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
-		nvgText(nvgCtx, 100, 100, "Test", nullptr);
+			nvgFontFace(nvgCtx, "sans");
+			nvgFontSize(nvgCtx, 24);
+			nvgFillColor(nvgCtx, nvgRGBA(128, 128, 0, 255));
+			nvgTextAlign(nvgCtx, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
+			nvgText(nvgCtx, 10, 10, ("Fractal Calc Time: " + toString(fractalTime, 9)).c_str(), nullptr);
+			size_t numIterations = static_cast<size_t>(std::log(M_E + g_fractalZoomAmount - 1) * g_kStartIterations);
+			nvgText(nvgCtx, 10, 40, ("Fractal Iteration Depth: " + toString(numIterations)).c_str(), nullptr);
+			double range = g_kFractalDomainRange / g_fractalZoomAmount;
+			nvgText(nvgCtx, 10, 70, ("Fractal Domain Size: " + toString(range, 20)).c_str(), nullptr);
 
-		nvgEndFrame(nvgCtx);
+			nvgEndFrame(nvgCtx);
+		}
 
 		glfwSwapBuffers(window);
 		glfwPollEvents();

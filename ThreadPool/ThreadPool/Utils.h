@@ -19,6 +19,8 @@
 #include <sstream>
 #include <iomanip>
 #include <functional>
+#include <future>
+#include <chrono>
 
 // A simple mulidimensional array
 template <typename T, size_t DimFirst, size_t... Dims>
@@ -157,3 +159,19 @@ struct InvokeType<std::reference_wrapper<T>> {
 // reference.
 template <typename T>
 using InvokeTypeT = typename InvokeType<T>::type;
+
+template<typename T>
+bool isReady(const std::future<T>& future)
+{
+	return future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
+}
+
+template <typename CollectionT>
+bool futuresReady(const CollectionT& collection) {
+	for (auto& future : collection) {
+		if (!isReady(future))
+			return false;
+	}
+
+	return true;
+}
