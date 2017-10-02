@@ -1,3 +1,16 @@
+//
+// Bachelor of Software Engineering
+// Media Design School
+// Auckland
+// New Zealand
+//
+// (c) 2017 Media Design School
+//
+// Description  : Utils for shader operations
+// Author       : Lance Chaney
+// Mail         : lance.cha7337@mediadesign.school.nz
+//
+
 #include <iostream>
 #include <fstream>
 #include "ShaderHelper.h"
@@ -43,7 +56,7 @@ GLuint compileShader(GLenum ShaderType, const char* shaderCode) {
 	const GLchar* p[1];
 	p[0] = shaderCode;
 	GLint Lengths[1];
-	Lengths[0] = strlen(shaderCode);
+	Lengths[0] = static_cast<GLint>(strlen(shaderCode));
 
 	glShaderSource(shaderObjectId, 1, p, Lengths);
 	glCompileShader(shaderObjectId);

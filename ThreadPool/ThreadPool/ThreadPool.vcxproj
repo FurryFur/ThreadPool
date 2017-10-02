@@ -102,6 +102,10 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>opengl32.lib;glfw3.lib;nanovg.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)*.glsl" "$(OutDir)" /y
+xcopy "$(ProjectDir)Assets" "$(OutDir)Assets\" /sy</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
@@ -116,6 +120,10 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>opengl32.lib;glfw3.lib;nanovg.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)*.glsl" "$(OutDir)" /y
+xcopy "$(ProjectDir)Assets" "$(OutDir)Assets\" /sy</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -134,6 +142,10 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>opengl32.lib;glfw3.lib;nanovg.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)*.glsl" "$(OutDir)" /y
+xcopy "$(ProjectDir)Assets" "$(OutDir)Assets\" /sy</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -152,6 +164,10 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>opengl32.lib;glfw3.lib;nanovg.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy "$(ProjectDir)*.glsl" "$(OutDir)" /y
+xcopy "$(ProjectDir)Assets" "$(OutDir)Assets\" /sy</Command>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Dependencies\src\glad\glad.c" />
@@ -159,7 +175,6 @@
     <ClCompile Include="INIParser.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ShaderHelper.cpp" />
-    <ClCompile Include="Task.cpp" />
     <ClCompile Include="ThreadPool.cpp" />
     <ClCompile Include="WinContextStore.cpp" />
   </ItemGroup>
@@ -167,7 +182,6 @@
     <ClInclude Include="GLUtils.h" />
     <ClInclude Include="INIParser.h" />
     <ClInclude Include="ShaderHelper.h" />
-    <ClInclude Include="Task.h" />
     <ClInclude Include="ThreadPool.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="AtomicQueue.h" />

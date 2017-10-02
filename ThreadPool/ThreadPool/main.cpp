@@ -1,3 +1,17 @@
+//
+// Bachelor of Software Engineering
+// Media Design School
+// Auckland
+// New Zealand
+//
+// (c) 2017 Media Design School
+//
+// Description  : The main code for the application.
+//                Mandelbrot calculations are done in processRegion
+// Author       : Lance Chaney
+// Mail         : lance.cha7337@mediadesign.school.nz
+//
+
 #define _USE_MATH_DEFINES
 #define NANOVG_GL3_IMPLEMENTATION
 
@@ -267,7 +281,12 @@ void updateTexture(GLuint texture, size_t regionStartX, size_t regionStartY, siz
 	glBindTexture(GL_TEXTURE_2D, texture);
 
 	glPixelStorei(GL_UNPACK_ROW_LENGTH, g_kPixelsHoriz);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, regionStartX, regionStartY, regionWidth, regionHeight, GL_RGB, GL_UNSIGNED_BYTE, &g_textureData[regionStartY][regionStartX][0]);
+	glTexSubImage2D(GL_TEXTURE_2D, 
+	                0, 
+	                static_cast<GLint>(regionStartX), static_cast<GLint>(regionStartY),
+	                static_cast<GLsizei>(regionWidth), static_cast<GLsizei>(regionHeight),
+	                GL_RGB, GL_UNSIGNED_BYTE, 
+	                &g_textureData[regionStartY][regionStartX][0]);
 }
 
 // Calculate the pixel colors for a region of the mandelbrot fractal

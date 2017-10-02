@@ -1,3 +1,16 @@
+//
+// Bachelor of Software Engineering
+// Media Design School
+// Auckland
+// New Zealand
+//
+// (c) 2017 Media Design School
+//
+// Description  : An ini file parser.
+// Author       : Lance Chaney
+// Mail         : lance.cha7337@mediadesign.school.nz
+//
+
 #include "INIParser.h"
 
 #include <algorithm>
@@ -79,7 +92,7 @@ bool try_stob(const std::string& _s, bool& b) {
 	// Interpret ints as bools, e.g. foo = 1 is true
 	int i;
 	if (try_stoi(s, i)) {
-		b = static_cast<bool>(i);
+		b = i != 0;
 		return true;
 	}
 

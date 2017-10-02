@@ -1,3 +1,16 @@
+//
+// Bachelor of Software Engineering
+// Media Design School
+// Auckland
+// New Zealand
+//
+// (c) 2017 Media Design School
+//
+// Description  : A thread pool
+// Author       : Lance Chaney
+// Mail         : lance.cha7337@mediadesign.school.nz
+//
+
 #ifndef THREADPOOL_H
 #define THREADPOOL_H
 
@@ -19,20 +32,30 @@ class ThreadPool
 {
 public:
 	ThreadPool();
-	ThreadPool(size_t size);
+	// numThreads specifies the number of threads that 
+	// should be used by this thread pool.
+	ThreadPool(size_t numThreads);
 	~ThreadPool();
 
-	//The ThreadPool is non-copyable.
-	ThreadPool(const ThreadPool& _kr) = delete;
-	ThreadPool& operator= (const ThreadPool& _kr) = delete;
+	// The ThreadPool is non-copyable.
+	ThreadPool(const ThreadPool&) = delete;
+	ThreadPool& operator= (const ThreadPool&) = delete;
 	
+	// Submits a function the thread pool for execution.
+	// Arguments to the callable can be supplied after the callable.
+	// To pass a value by reference use std::ref otherwise values will be copied.
 	template<typename Callable, typename... Args>
 	std::future<std::result_of_t<Callable(Args...)>> submit(Callable&& workItem, Args&&... args);
 	
+	// Start executing work items submitted to the threadpool
 	void start();
+
+	// Stop the thread pool.
+	// The thread pool is reset to its initial state after this call
+	// and it is safe to call start again.
 	void stop();
 
-	// Empty the work queue 
+	// Empty all work items from the work queue.
 	void clearWork();
 
 	// Sets the number of threads to run inside the thread pool
@@ -45,9 +68,11 @@ public:
 	size_t getNumThreads() const;
 
 private:
+	// The main function that threads are executing in.
+	// Handles removing work items from the queue and executing them.
 	void doWork(size_t threadId);
 
-	//An atomic boolean variable to stop all threads in the threadpool.
+	// An atomic boolean variable to stop all threads in the threadpool.
 	std::atomic_bool m_stop{ false };
 
 	//A WorkQueue of tasks which are functors

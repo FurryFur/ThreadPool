@@ -1,4 +1,15 @@
-/*********A very basic Work Queue class***************/
+//
+// Bachelor of Software Engineering
+// Media Design School
+// Auckland
+// New Zealand
+//
+// (c) 2017 Media Design School
+//
+// Description  : A thread safe queue
+// Author       : Lance Chaney
+// Mail         : lance.cha7337@mediadesign.school.nz
+//
 
 #ifndef WORKQUEUE_H
 #define WORKQUEUE_H
@@ -6,14 +17,13 @@
 #include <queue>
 #include <mutex>
 
-
 template<typename T>
 class AtomicQueue
 {
 public:
 	AtomicQueue() {}
 
-	//Insert an item at the back of the queue and signal any thread that might be waiting for the q to be populated
+	// Insert an item at the back of the queue.
 	void push(const T&& item)
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -21,8 +31,8 @@ public:
 		m_cvNotEmpty.notify_one(); 
 	}
 
-	//Attempt to get a workitem from the queue
-	//If the Q is empty just return false; 
+	// Attempts to get a workitem from the queue
+	// If the queue is empty just return false; 
 	bool tryPop(T& workItem)
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -36,8 +46,8 @@ public:
 		return true;
 	}
 
-	//Attempt to get a workitem from the queue
-	//If the Q is empty just return false; 
+	// Attempts to get a workitem from the queue
+	// If the queue is empty then block and wait for items.
 	void pop(T& workItem)
 	{
 		std::unique_lock<std::mutex> lock(m_mutex);
@@ -47,19 +57,20 @@ public:
 		m_workQueue.pop();
 	}
 
-	// Clear the queue
+	// Clears the queue
 	void clear() {
 		std::lock_guard<std::mutex> lock(m_mutex);
 		m_workQueue.swap(std::queue<T>()); // Swap with empty queue to clear
 	}
 
-	//Checking if the queue is empty or not
+	// Checks if the queue is empty or not
 	bool empty() const
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
 		return m_workQueue.empty();
 	}
 
+	// Returns the number of items in the queue
 	size_t size() const
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
