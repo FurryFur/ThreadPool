@@ -1,3 +1,6 @@
+#include "INIParser.h"
+
+#include <algorithm>
 #include <fstream>
 #include <string>
 #include <sstream>
@@ -6,15 +9,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "INIParser.h"
-
-
-CINIParser::CINIParser()
+INIParser::INIParser()
 {
 }
 
 
-CINIParser::~CINIParser()
+INIParser::~INIParser()
 {
 }
 
@@ -29,64 +29,113 @@ bool try_stoi(const std::string& s, int& i) {
 	}
 }
 
-bool CINIParser::LoadIniFile(const char * _pcFilename)
-{
-	const std::regex kstrREGEX_COMMENT(R"(;(.*)$)");
-	const std::regex krgxREGEX_SECTION(R"(\[\s*([^\s;]+)\s*\])");
-	const std::regex krgxPARAMETER(R"(([^\s;]+)\s*=\s*([^\s;]*(\s+[^\s;]+)*))");
-	const std::regex krgxQUOTED_PARAMETER(R"(([^\s;]+)\s*=\s*\"(.*)\")"); 
+bool try_stosz(const std::string& s, size_t& sz) {
+	try {
+		size_t pos;
+		sz = static_cast<size_t>(std::stoul(s, &pos));
+		return pos == s.size();
+	}
+	catch (const std::invalid_argument&) {
+		return false;
+	}
+}
 
-	std::ifstream ifs(_pcFilename);
+bool try_stof(const std::string& s, float& f) {
+	try {
+		size_t pos;
+		f = std::stof(s, &pos);
+		return pos == s.size();
+	} catch (const std::invalid_argument&) {
+		return false;
+	}
+}
+
+bool try_stod(const std::string& s, double& d) {
+	try {
+		size_t pos;
+		d = std::stod(s, &pos);
+		return pos == s.size();
+	}
+	catch (const std::invalid_argument&) {
+		return false;
+	}
+}
+
+bool try_stob(const std::string& _s, bool& b) {
+	// Convert to lowercase for case insensitive comparison
+	std::string s;
+	std::transform(_s.begin(), _s.end(), s.begin(), ::tolower);
+
+	// Check if the string is "true" or "false"
+	if (s == "true") {
+		b = true;
+		return true;
+	} 
+	if (s == "false") {
+		b = false;
+		return false;
+	} 
+	
+	// Interpret ints as bools, e.g. foo = 1 is true
+	int i;
+	if (try_stoi(s, i)) {
+		b = static_cast<bool>(i);
+		return true;
+	}
+
+	return false;
+}
+
+bool INIParser::LoadIniFile(const char * filename)
+{
+	const std::regex kRegexComment(R"(;(.*)$)");
+	const std::regex kRegexSection(R"(\[\s*([^\s;]+)\s*\])");
+	const std::regex kRegexParameter(R"(([^\s;]+)\s*=\s*([^\s;]*(\s+[^\s;]+)*))");
+	const std::regex kRegexQuotedParameter(R"(([^\s;]+)\s*=\s*\"(.*)\")"); 
+
+	std::ifstream ifs(filename);
 	std::string line;
 
 	// Loop over lines
+	bool result;
 	std::string strCurSection  = "__GLOBAL__";
-	if (ifs)
-	{
-		while (std::getline(ifs, line))
-		{
+	if (ifs) {
+		while (std::getline(ifs, line)) {
 			std::smatch sm;
 
-			if (std::regex_search(line, sm, krgxREGEX_SECTION))
-			{
+			if (std::regex_search(line, sm, kRegexSection)) {
 				strCurSection = sm.str(1);
-			}
-			else if (
-				std::regex_search(line, sm, krgxQUOTED_PARAMETER) ||
-				std::regex_search(line, sm, krgxPARAMETER))
-			{
+			} else if (std::regex_search(line, sm, kRegexQuotedParameter) 
+			        || std::regex_search(line, sm, kRegexParameter)) {
 				AddValue(strCurSection.c_str(), sm.str(1).c_str(), sm.str(2).c_str());
 			}
-			else {}
 		}
 
-		return true;
+		result = true;
+	} else {
+		result = false;
 	}
-	else
-	{
-		return false;
-	}
-
-	//TODO: Make everything lowercase (case insensitive)
+	
+	return result;
 }
 
-std::string CINIParser::GenKey(const char * _pcSection, const char * _pcKey)
+std::string INIParser::GenKey(const char * section, const char * key)
 {
-	return std::string(_pcSection) + '|' + std::string(_pcKey);
+	return std::string(section) + '|' + std::string(key);
 }
 
-bool CINIParser::AddValue(const char * _pcSection, const char * _pcKey, const char * _pcValue)
+bool INIParser::AddValue(const char * section, const char * key, const char * value)
 {
-	auto itResult = m_mapPairs.insert(std::make_pair(GenKey(_pcSection, _pcKey), _pcValue));
+	auto itResult = m_mapPairs.insert(std::make_pair(GenKey(section, key), value));
 	return itResult.second;
 }
 
-bool CINIParser::GetStringValue(const char * _pcSection, const char * _pcKey, std::string & _rStrValue)
+bool INIParser::GetStringValue(const char * section, const char * key, std::string & value)
 {
-	auto it = m_mapPairs.find(GenKey(_pcSection, _pcKey));
+	auto it = m_mapPairs.find(GenKey(section, key));
 	if (it != m_mapPairs.end())
 	{
-		_rStrValue = it->second;
+		value = it->second;
 		return true;
 	}
 	else
@@ -95,21 +144,47 @@ bool CINIParser::GetStringValue(const char * _pcSection, const char * _pcKey, st
 	}
 }
 
-bool CINIParser::GetIntValue(const char * _pcSection, const char * _pcKey, int & _riValue)
+bool INIParser::GetIntValue(const char * section, const char * key, int & value)
 {
 	std::string strValue;
-	GetStringValue(_pcSection, _pcKey, strValue);
+	GetStringValue(section, key, strValue);
 
-	bool bResult = try_stoi(strValue, _riValue);
+	bool bResult = try_stoi(strValue, value);
 	return bResult;
 }
 
-bool CINIParser::GetFloatValue(const char * _pcSection, const char * _pcKey, float & _rfValue)
+bool INIParser::GetIntValue(const char * section, const char * key, size_t & value)
 {
-	return false;
+	std::string strValue;
+	GetStringValue(section, key, strValue);
+
+	bool bResult = try_stosz(strValue, value);
+	return bResult;
 }
 
-bool CINIParser::GetBoolValue(const char * _pcSection, const char * _pcKey, bool & _rbValue)
+bool INIParser::GetFloatValue(const char * section, const char * key, float & value)
 {
-	return false;
+	std::string strValue;
+	GetStringValue(section, key, strValue);
+
+	bool bResult = try_stof(strValue, value);
+	return bResult;
+}
+
+bool INIParser::GetFloatValue(const char * section, const char * key, double & value)
+{
+	std::string strValue;
+	GetStringValue(section, key, strValue);
+
+	bool bResult = try_stod(strValue, value);
+	return bResult;
+}
+
+bool INIParser::GetBoolValue(const char * section, const char * key, bool & value)
+{
+	std::string strValue;
+	GetStringValue(section, key, strValue);
+
+	bool bResult = try_stob(strValue, value);
+	return bResult;
 }

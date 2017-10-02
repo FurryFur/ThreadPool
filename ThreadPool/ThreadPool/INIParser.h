@@ -6,50 +6,53 @@
 #include <map>
 #include <string>
 
-class CINIParser
+class INIParser
 {
 public:
-	CINIParser();
-	~CINIParser();
+	INIParser();
+	~INIParser();
 
-	// Load an INI file.
-	// Populates the map with keys and values using
-	// the add value function.
-	bool LoadIniFile(const char* _pcFilename);
+	// Loads an INI file.
+	bool LoadIniFile(const char* filename);
 
 	// Adds a value to the map.
-	// Combines the _pcSection, with _pcKey to create a
-	// key for the map.
-	bool AddValue(const char* _pcSection, const char* _pcKey, const char* _pcValue);
+	bool AddValue(const char* section, const char* key, const char* value);
 
-	// GetStringValue
+	// Retrieves a string value stored in the INI file by section and key.
 	// Returns true if the value was found.
-	// _rStrValue will be populated with the correct data if // the key is found in the map.
-	bool GetStringValue(const char* _pcSection, const char* _pcKey, std::string& _rStrValue);
+	// On success, outValue will be populated with the retrieved value.
+	bool GetStringValue(const char* section, const char* key, std::string& outValue);
 
-	// GetIntValue
-	// Returns true if the value was found.
-	// _riValue will be populated with the correct data if
-	// the key is found in the map.
-	bool GetIntValue(const char* _pcSection, const char* _pcKey, int& _riValue);
+	// Retrieves an int value stored in the INI file by section and key.
+	// Returns true if the value was found, and was convertible to an int
+	// On success, outValue will be populated with the retrieved value.
+	bool GetIntValue(const char* section, const char* key, int& value);
 
-	// GetFloatValue
-	// Returns true if the value was found.
-	// _rfValue will be populated with the correct data if
-	// the key is found in the map.
-	bool GetFloatValue(const char* _pcSection, const char* _pcKey, float& _rfValue);
+	// Retrieves a size_t value stored in the INI file by section and key.
+	// Returns true if the value was found, and was convertible to a size_t
+	// On success, outValue will be populated with the retrieved value.
+	bool GetIntValue(const char* section, const char* key, size_t& value);
 
-	// GetBoolValue
-	// Returns true if the value was found.
-	// _rbValue will be populated with the correct data if
-	// the key is found in the map.
-	bool GetBoolValue(const char* _pcSection, const char* _pcKey, bool& _rbValue);
+	// Retrieves a float value stored in the INI file by section and key.
+	// Returns true if the value was found, and was convertible to a float.
+	// On success, outValue will be populated with the retrieved value.
+	bool GetFloatValue(const char* section, const char* key, float& value);
+
+	// Retrieves a double value stored in the INI file by section and key.
+	// Returns true if the value was found, and was convertible to a double.
+	// On success, outValue will be populated with the retrieved value.
+	bool GetFloatValue(const char* section, const char* key, double& value);
+
+	// Retrieves a bool value stored in the INI file by section and key.
+	// Returns true if the value was found, and was convertible to a bool.
+	// On success, outValue will be populated with the retrieved value.
+	bool GetBoolValue(const char* section, const char* key, bool& value);
 
 private:
 	//Create a map member variable to store the ini file.
 	std::map<std::string, std::string> m_mapPairs;
 
-	std::string CINIParser::GenKey(const char * _pcSection, const char * _pcKey);
+	std::string INIParser::GenKey(const char * section, const char * key);
 };
 
 #endif // !INIPARSER_H
