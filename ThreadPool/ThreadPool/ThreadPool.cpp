@@ -59,6 +59,11 @@ void ThreadPool::clearWork()
 	m_workQueue.clear();
 }
 
+void ThreadPool::setNumThreads(size_t numThreads)
+{
+	m_numThreads = numThreads;
+}
+
 size_t ThreadPool::getNumThreads() const
 {
 	return m_numThreads;

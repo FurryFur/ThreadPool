@@ -35,6 +35,13 @@ public:
 	// Empty the work queue 
 	void clearWork();
 
+	// Sets the number of threads to run inside the thread pool
+	// WARNING: Using this after the threadpool has started will
+	// result in undefined behavior, and likely crash.
+	void setNumThreads(size_t numThreads);
+
+	// Gets the number of threads running or that will run in the
+	// thread pool.
 	size_t getNumThreads() const;
 
 private:

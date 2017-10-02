@@ -7,6 +7,7 @@
 #include "ShaderHelper.h"
 #include "GLUtils.h"
 #include "Utils.h"
+#include "INIParser.h"
 
 #include <glad\glad.h>
 #include <GLFW\glfw3.h>
@@ -17,18 +18,19 @@
 #include <glm\gtc\type_ptr.hpp>
 
 #include <iostream>
-#include <array>
 #include <thread>
 #include <chrono>
 #include <functional>
 #include <complex>
 #include <cmath>
+#include <vector>
 //#include <mutex>
 //#include <vld.h>
 
 using glm::mat4;
 using glm::vec3;
 using glm::vec4;
+using namespace std::chrono_literals;
 
 using ThreadPoolT = ThreadPool; // ThreadPoolWithStorage<WinContextStore>;
 
@@ -42,44 +44,41 @@ const size_t g_kVertArraySize = g_kNumVerts * g_kNumComponents;
 const size_t g_kIdxArraySize = g_kNumTriangles * 3;
 const size_t g_kPixelsHoriz = 1024;
 const size_t g_kPixelsVert = 1024;
-const size_t g_kRegionsHoriz = 16;
-const size_t g_kRegionsVert = 16;
-const size_t g_kRegionWidth = g_kPixelsHoriz / g_kRegionsHoriz;
-const size_t g_kRegionHeight = g_kPixelsVert / g_kRegionsVert;
 const size_t g_kFractalDomainRange = 4;
-const size_t g_kFractalInitialDepth = 20;
 
-const float g_kCameraSpeed = 0.1f;
+// Configurable from ini file
+size_t g_regionsHoriz = 16;
+size_t g_regionsVert = 16;
+size_t g_fractalInitialDepth = 20;
+size_t g_fractalDepthIncrement = 20;
+double g_fractalZoomSensitivity = 2;
+// Dependent, need to be updated based value retrieved from the ini file
+size_t g_kRegionWidth = g_kPixelsHoriz / g_regionsHoriz;
+size_t g_kRegionHeight = g_kPixelsVert / g_regionsVert;
 
-NDArray<GLubyte, g_kPixelsVert, g_kPixelsHoriz, 3> g_textureData;
-std::array<std::future<void>, g_kRegionsHoriz * g_kRegionsVert> g_futures;
-
-bool g_movingForward = false;
-bool g_movingBack = false;
-bool g_movingLeft = false;
-bool g_movingRight = false;
-bool g_zoomingIn = false;
-bool g_zoomingOut = false;
 bool g_fractalRenderRequest = false;
-
 double g_fractalZoomAmount = 1;
 double g_fractalCenterRe = -0.5;
 double g_fractalCenterIm = 0;
-size_t g_fractalRecursionDepth = g_kFractalInitialDepth;
+size_t g_fractalRecursionDepth = g_fractalInitialDepth;
 
-using namespace std::chrono_literals;
+NDArray<GLubyte, g_kPixelsVert, g_kPixelsHoriz, 3> g_textureData;
+std::vector<std::future<void>> g_futures;
 
+// Callback for handling glfw errors
 void errorCallback(int error, const char* description)
 {
 	fprintf(stderr, "Error: %s\n", description);
 }
 
+// Handles exiting when the escape key is pressed
 void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 	if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 }
 
+// Handles zooming in and out of the mandelbrot fractal
 void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
 {
 	g_fractalRenderRequest = true;
@@ -102,13 +101,13 @@ void scrollCallback(GLFWwindow* window, double xoffset, double yoffset)
 	g_fractalCenterIm = minIm + ypos / (g_kPixelsVert - 1) * range;
 
 	// Increase zoom
-	const double sensitivity = 2;
 	if (yoffset > 0)
-		g_fractalZoomAmount *= yoffset * sensitivity;
+		g_fractalZoomAmount *= yoffset * g_fractalZoomSensitivity;
 	else
-		g_fractalZoomAmount /= -yoffset * sensitivity;
+		g_fractalZoomAmount /= -yoffset * g_fractalZoomSensitivity;
 }
 
+// Handles window resize events
 void framebufferSizeCallback(GLFWwindow* window, int width, int height)
 {
 	glViewport(0, 0, width, height);
@@ -157,7 +156,7 @@ void createGeometry(GLuint& rVAO) {
 	glBindVertexArray(0);
 }
 
-// Setup texturing
+// Creates a texture on the GPU to write to
 GLuint setupTexuring(GLuint program) {
 	// Buffer texture data to GPU
 	GLuint texture;
@@ -176,11 +175,7 @@ GLuint setupTexuring(GLuint program) {
 	return texture;
 }
 
-void sleep(std::chrono::seconds seconds)
-{
-	std::this_thread::sleep_for(seconds);
-}
-
+// Sets up the camera
 void doTransforms(GLFWwindow* window, GLuint program, float aspect_ratio)
 {
 	static vec3 s_cameraPos{ 0.0f, 0.0f, 3.0 };
@@ -210,6 +205,7 @@ void doTransforms(GLFWwindow* window, GLuint program, float aspect_ratio)
 	glUniformMatrix4fv(projectionLocation, 1, GL_FALSE, glm::value_ptr(ortho));
 }
 
+// Does all boilerplate initialization.
 void init(GLFWwindow*& window, NVGcontext*& nvgCtx, GLuint& program, GLuint& VAO, GLuint& texture)
 {
 	glfwSetErrorCallback(errorCallback);
@@ -264,13 +260,9 @@ void init(GLFWwindow*& window, NVGcontext*& nvgCtx, GLuint& program, GLuint& VAO
 	nvgCreateFont(nvgCtx, "sans-bold", "Assets/Font/example/Roboto-Bold.ttf");
 }
 
+// Send the current version of the mandelbrot from the CPU to the GPU texture
 void updateTexture(GLuint texture, size_t regionStartX, size_t regionStartY, size_t regionWidth, size_t regionHeight)
 {
-	// glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
-	// static thread_local GLFWwindow* s_threadGLCtx = glfwCreateWindow(1, 1, "ctx", nullptr, window);
-	//glfwMakeContextCurrent(threadPool.getThreadLocalStorage().getWinContext());
-
-	//glUseProgram(program);
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, texture);
 
@@ -278,10 +270,13 @@ void updateTexture(GLuint texture, size_t regionStartX, size_t regionStartY, siz
 	glTexSubImage2D(GL_TEXTURE_2D, 0, regionStartX, regionStartY, regionWidth, regionHeight, GL_RGB, GL_UNSIGNED_BYTE, &g_textureData[regionStartY][regionStartX][0]);
 }
 
-void process_region(GLuint texture, size_t regionStartX, size_t regionStartY
+// Calculate the pixel colors for a region of the mandelbrot fractal
+void processRegion(GLuint texture, size_t regionStartX, size_t regionStartY
                   , size_t width, size_t height)
 {
-	g_fractalRecursionDepth = static_cast<size_t>(std::log(M_E + g_fractalZoomAmount - 1) * g_kFractalInitialDepth);
+	g_fractalRecursionDepth = g_fractalInitialDepth + static_cast<size_t>(
+	                          (std::log(M_E + std::max(0.0, g_fractalZoomAmount - 1)) - 1)
+	                        * g_fractalZoomSensitivity * g_fractalDepthIncrement);
 
 	size_t regionEndY = regionStartY + height;
 	size_t regionEndX = regionStartX + width;
@@ -319,36 +314,32 @@ void process_region(GLuint texture, size_t regionStartX, size_t regionStartY
 			g_textureData[i][j][2] = diverges ? lerp(GLubyte{ 0 }, GLubyte{ 255 }, alpha) : 0;
 		}
 	}
-
-	//GLUtils::delegateGLFn(std::bind(update_texture, texture, regionStartX, regionStartY, width, height));
 }
 
+// Divides up the pixels of the fractal into regions, and submits them for processing on a threadpool
 void submitMandelbrot(ThreadPoolT& threadPool, GLuint texture, double zoomAmount)
 {
 	size_t regionHeight = g_kRegionHeight;
 	size_t regionWidth = g_kRegionWidth;
 	
 	// Submit regions to the WorkQueue
-	for (size_t i = 0; i < g_kRegionsVert; ++i) {
+	for (size_t i = 0; i < g_regionsVert; ++i) {
 		size_t regionStartY = i * regionHeight;
 
-		// Handle underflow by assigning more work to regions in the last row
-		if ((i == g_kRegionsVert - 1) && (regionStartY + regionHeight < g_kPixelsVert))
+		// Handle uneven regions by assigning more work to regions in the last row
+		if ((i == g_regionsVert - 1) && (regionStartY + regionHeight < g_kPixelsVert))
 			regionHeight = g_kPixelsVert - regionStartY;
 
-		for (size_t j = 0; j < g_kRegionsHoriz; ++j) {
+		for (size_t j = 0; j < g_regionsHoriz; ++j) {
 			size_t regionStartX = j * regionWidth;
 
-			// Handle underflow by assigning more work to regions in the last column
-			if ((j == g_kRegionsHoriz - 1) && (regionStartX + regionWidth < g_kPixelsHoriz))
+			// Handle uneven regions by assigning more work to regions in the last column
+			if ((j == g_regionsHoriz - 1) && (regionStartX + regionWidth < g_kPixelsHoriz))
 				regionWidth = g_kPixelsHoriz - regionStartX;
 
-			std::future<void> future = threadPool.submit(process_region, texture, regionStartX, regionStartY, regionWidth, regionHeight);
-			//std::cout << "Main Thread wrote item " << i << " to the Work Queue " << std::endl;
-			//Sleep for some random time to simulate delay in arrival of work items
-			//std::this_thread::sleep_for(std::chrono::milliseconds(rand()%1001));
+			std::future<void> future = threadPool.submit(processRegion, texture, regionStartX, regionStartY, regionWidth, regionHeight);
 
-			size_t workItemIdx = i * g_kRegionsHoriz + j;
+			size_t workItemIdx = i * g_regionsHoriz + j;
 			g_futures[workItemIdx] = std::move(future);
 		}
 	}
@@ -356,24 +347,31 @@ void submitMandelbrot(ThreadPoolT& threadPool, GLuint texture, double zoomAmount
 
 int main()
 {
+	// Read settings from config file
+	size_t numThreads = 0;
+	INIParser iniParser;
+	iniParser.LoadIniFile("Assets/Settings/config.ini");
+	iniParser.GetIntValue("Threading", "regionsHorizontal", g_regionsHoriz);
+	iniParser.GetIntValue("Threading", "regionsVertical", g_regionsVert);
+	iniParser.GetIntValue("Threading", "numThreads", numThreads);
+	iniParser.GetIntValue("Fractal", "initialIterationDepth", g_fractalInitialDepth);
+	iniParser.GetIntValue("Fractal", "iterationIncrement", g_fractalDepthIncrement);
+	iniParser.GetFloatValue("Fractal", "zoomSensitivity", g_fractalZoomSensitivity);
+	
+	// Setup the thread pool
+	g_futures = std::vector<std::future<void>>{ g_regionsHoriz * g_regionsVert };
+	ThreadPoolT threadPool;
+	if (numThreads > 0) {
+		threadPool.setNumThreads(numThreads);
+	}
+
+	// Do boilerplate initialization
 	GLFWwindow* window;
 	NVGcontext* nvgCtx;
 	GLuint program, VAO, texture;
-
 	init(window, nvgCtx, program, VAO, texture);
 
-	//Create a ThreadPool Object capable of holding as many threads as the number of cores
-	ThreadPoolT threadPool;
-
-	// Add sub-window / opengl sub-context to threads
-	//threadPool.getThreadLocalStorage(0).storeWinContext(window); // ID 0 is for the main thread
-	//for (size_t i = 1; i <= threadPool.getNumThreads(); ++i) {   // ID 0 is for the main thread
-	//															 //glfwWindowHint(GLFW_VISIBLE, GL_FALSE);
-	//	GLFWwindow* winContext = glfwCreateWindow(1, 1, "ctx", nullptr, window);
-	//	threadPool.getThreadLocalStorage(i).storeWinContext(winContext);
-	//}
-
-	// TODO: Read from file
+	// Starts the mandelbrot processing
 	static bool s_fractalTimerRunning = true;
 	using namespace std::chrono;
 	double fractalTime = -1;
@@ -393,7 +391,7 @@ int main()
 		float aspectRatio = static_cast<float>(winWidth) / winHeight;
 		float pxRatio = static_cast<float>(fbWidth) / winWidth;
 
-		// Update the mandelbrot texture on CPU / GPU
+		// Updates the mandelbrot texture on the CPU / GPU
 		if (g_fractalRenderRequest) {
 
 			threadPool.clearWork();
@@ -403,13 +401,17 @@ int main()
 			g_fractalRenderRequest = false;
 		}
 		updateTexture(texture, 0, 0, g_kPixelsHoriz, g_kPixelsVert);
+
+		// Checks for mandelbrot completion and records the time taken to calculate
 		if (s_fractalTimerRunning && futuresReady(g_futures)) {
 			fractalTime = duration_cast<nanoseconds>(high_resolution_clock::now() - start).count() / 1000000000.0;
 			s_fractalTimerRunning = false;
 		}
 
+		// Setup camera
 		doTransforms(window, program, aspectRatio);
 
+		// Render fractal on screen
 		glClear(GL_COLOR_BUFFER_BIT);
 
 		glActiveTexture(GL_TEXTURE0); // Put this texture in texture unit 0
