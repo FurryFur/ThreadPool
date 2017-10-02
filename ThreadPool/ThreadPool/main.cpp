@@ -47,7 +47,7 @@ const size_t g_kRegionsVert = 16;
 const size_t g_kRegionWidth = g_kPixelsHoriz / g_kRegionsHoriz;
 const size_t g_kRegionHeight = g_kPixelsVert / g_kRegionsVert;
 const size_t g_kFractalDomainRange = 4;
-const size_t g_kStartIterations = 20;
+const size_t g_kFractalInitialDepth = 20;
 
 const float g_kCameraSpeed = 0.1f;
 
@@ -65,6 +65,7 @@ bool g_fractalRenderRequest = false;
 double g_fractalZoomAmount = 1;
 double g_fractalCenterRe = -0.5;
 double g_fractalCenterIm = 0;
+size_t g_fractalRecursionDepth = g_kFractalInitialDepth;
 
 using namespace std::chrono_literals;
 
@@ -280,7 +281,7 @@ void updateTexture(GLuint texture, size_t regionStartX, size_t regionStartY, siz
 void process_region(GLuint texture, size_t regionStartX, size_t regionStartY
                   , size_t width, size_t height)
 {
-	size_t numIterations = static_cast<size_t>(std::log(M_E + g_fractalZoomAmount - 1) * g_kStartIterations);
+	g_fractalRecursionDepth = static_cast<size_t>(std::log(M_E + g_fractalZoomAmount - 1) * g_kFractalInitialDepth);
 
 	size_t regionEndY = regionStartY + height;
 	size_t regionEndX = regionStartX + width;
@@ -300,7 +301,7 @@ void process_region(GLuint texture, size_t regionStartX, size_t regionStartY
 			double norm = 0;
 			bool diverges = false;
 			size_t iteration = 0;
-			for (iteration = 1; iteration <= numIterations; ++iteration) {
+			for (iteration = 1; iteration <= g_fractalRecursionDepth; ++iteration) {
 
 				z = std::pow(z, 2) + c;
 
@@ -311,11 +312,11 @@ void process_region(GLuint texture, size_t regionStartX, size_t regionStartY
 				}
 			}
 
-			double alpha = static_cast<double>(iteration) / numIterations;
-
-			g_textureData[i][j][0] = diverges ? alpha * 255 : 0;
-			g_textureData[i][j][1] = 0;
-			g_textureData[i][j][2] = 0;
+			double alpha = 2 * static_cast<double>(iteration) / g_fractalRecursionDepth;
+			
+			g_textureData[i][j][0] = 0;
+			g_textureData[i][j][1] = diverges ? lerp(GLubyte{ 0 }, GLubyte{ 255 }, alpha) : 0;
+			g_textureData[i][j][2] = diverges ? lerp(GLubyte{ 0 }, GLubyte{ 255 }, alpha) : 0;
 		}
 	}
 
@@ -427,8 +428,7 @@ int main()
 			nvgFillColor(nvgCtx, nvgRGBA(255, 255, 255, 255));
 			nvgTextAlign(nvgCtx, NVG_ALIGN_LEFT | NVG_ALIGN_TOP);
 			nvgText(nvgCtx, 10, 10, ("Fractal Calc Time: " + toString(fractalTime, 9)).c_str(), nullptr);
-			size_t numIterations = static_cast<size_t>(std::log(M_E + g_fractalZoomAmount - 1) * g_kStartIterations);
-			nvgText(nvgCtx, 10, 40, ("Fractal Iteration Depth: " + toString(numIterations)).c_str(), nullptr);
+			nvgText(nvgCtx, 10, 40, ("Fractal Iteration Depth: " + toString(g_fractalRecursionDepth)).c_str(), nullptr);
 			double range = g_kFractalDomainRange / g_fractalZoomAmount;
 			nvgText(nvgCtx, 10, 70, ("Fractal Domain Size: " + toString(range, 20)).c_str(), nullptr);
 

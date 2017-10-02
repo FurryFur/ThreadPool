@@ -156,6 +156,7 @@
   <ItemGroup>
     <ClCompile Include="Dependencies\src\glad\glad.c" />
     <ClCompile Include="GLUtils.cpp" />
+    <ClCompile Include="INIParser.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="ShaderHelper.cpp" />
     <ClCompile Include="Task.cpp" />
@@ -164,6 +165,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GLUtils.h" />
+    <ClInclude Include="INIParser.h" />
     <ClInclude Include="ShaderHelper.h" />
     <ClInclude Include="Task.h" />
     <ClInclude Include="ThreadPool.h" />

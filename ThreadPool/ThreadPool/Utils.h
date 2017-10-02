@@ -101,41 +101,10 @@ std::string toString(const T value, const int decimalPlaces = 2)
 	return out.str();
 }
 
-// Used for perfect forwarding bind arguments
-// template<class ...Args>
-// void bind_and_forward(Args&&... args)
-// {
-//                                         vvvvvvvvvvvvvvvvvvvvvvvvvvv - stored as lvalues
-//     auto binder = std::bind(f<Args...>, std::forward<Args>(args)...); 
-//                             ^^^^^^^^^ - Error specializing Invoke if any args have rvalue or std::reference_wrapper<T> type
-//     binder();
-// }
-// Bind always passes its stored arguments by lvalue reference when the bound function is invoked.
-// For std::reference_wrapper<T> types the get() member function is called when passing to the 
-// bound function in order to convert it to a normal lvalue reference. If the function prototype
-// f<Args...>, stored by bind, contains any rvalue references or std::reference_wrapper<T> types,
-// then the compiler will fail to specialize due to a type mismatch. The solution is to replace
-// f<Args...> with f<InvokeTypeT<Arg>> to ensure all stored arguments can be passed by lvalue
-// reference.
+
 template <typename Arg>
 struct InvokeType : std::add_lvalue_reference<Arg> { };
 
-// Used for perfect forwarding bind arguments
-// template<class ...Args>
-// void bind_and_forward(Args&&... args)
-// {
-//                                         vvvvvvvvvvvvvvvvvvvvvvvvvvv - stored as lvalues
-//     auto binder = std::bind(f<Args...>, std::forward<Args>(args)...); 
-//                             ^^^^^^^^^ - Error specializing Invoke if any args have rvalue or std::reference_wrapper<T> type
-//     binder();
-// }
-// Bind always passes its stored arguments by lvalue reference when the bound function is invoked.
-// For std::reference_wrapper<T> types the get() member function is called when passing to the 
-// bound function in order to convert it to a normal lvalue reference. If the function prototype
-// f<Args...>, stored by bind, contains any rvalue references or std::reference_wrapper<T> types,
-// then the compiler will fail to specialize due to a type mismatch. The solution is to replace
-// f<Args...> with f<InvokeTypeT<Arg>> to ensure all stored arguments can be passed by lvalue
-// reference.
 template <typename T>
 struct InvokeType<std::reference_wrapper<T>> {
 	using type = T&;
@@ -160,12 +129,14 @@ struct InvokeType<std::reference_wrapper<T>> {
 template <typename T>
 using InvokeTypeT = typename InvokeType<T>::type;
 
+// Returns true when a future is ready (when the associated task has finished its work)
 template<typename T>
 bool isReady(const std::future<T>& future)
 {
 	return future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
 }
 
+// Returns true when all futures in the collection are ready (when the associated tasks hav finished their work)
 template <typename CollectionT>
 bool futuresReady(const CollectionT& collection) {
 	for (auto& future : collection) {
@@ -174,4 +145,10 @@ bool futuresReady(const CollectionT& collection) {
 	}
 
 	return true;
+}
+
+// Lerp between two different values by a scaler (usually between 0 and 1)
+template <typename T>
+T lerp(T start, T end, double alpha) {
+	return static_cast<T>(start + alpha * (end - start));
 }
